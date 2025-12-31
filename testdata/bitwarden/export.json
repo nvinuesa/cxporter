@@ -1,0 +1,208 @@
+{
+  "encrypted": false,
+  "folders": [
+    {
+      "id": "folder-1",
+      "name": "Work"
+    },
+    {
+      "id": "folder-2",
+      "name": "Personal"
+    }
+  ],
+  "items": [
+    {
+      "id": "login-1",
+      "organizationId": null,
+      "folderId": "folder-1",
+      "type": 1,
+      "name": "GitHub",
+      "notes": "My GitHub account for work projects",
+      "favorite": true,
+      "login": {
+        "uris": [
+          {
+            "uri": "https://github.com",
+            "match": null
+          },
+          {
+            "uri": "https://github.com/login",
+            "match": null
+          }
+        ],
+        "username": "devuser",
+        "password": "supersecret123",
+        "totp": "otpauth://totp/GitHub:devuser?secret=JBSWY3DPEHPK3PXP&issuer=GitHub"
+      },
+      "secureNote": null,
+      "card": null,
+      "identity": null,
+      "collectionIds": [],
+      "creationDate": "2024-01-15T10:30:00.000Z",
+      "revisionDate": "2024-06-20T14:45:00.000Z",
+      "reprompt": 0,
+      "fields": [
+        {
+          "name": "recovery_email",
+          "value": "backup@example.com",
+          "type": 0
+        }
+      ]
+    },
+    {
+      "id": "login-2",
+      "organizationId": null,
+      "folderId": "folder-2",
+      "type": 1,
+      "name": "Gmail",
+      "notes": "",
+      "favorite": false,
+      "login": {
+        "uris": [
+          {
+            "uri": "https://mail.google.com",
+            "match": null
+          }
+        ],
+        "username": "user@gmail.com",
+        "password": "mailpassword456",
+        "totp": "NBSWY3DP"
+      },
+      "secureNote": null,
+      "card": null,
+      "identity": null,
+      "collectionIds": [],
+      "creationDate": "2023-06-01T08:00:00.000Z",
+      "revisionDate": "2024-03-15T09:30:00.000Z",
+      "reprompt": 0,
+      "fields": null
+    },
+    {
+      "id": "note-1",
+      "organizationId": null,
+      "folderId": null,
+      "type": 2,
+      "name": "Server Credentials",
+      "notes": "Production Server:\nHost: prod.example.com\nPort: 22\nUser: admin\n\nStaging Server:\nHost: staging.example.com\nPort: 22\nUser: deploy",
+      "favorite": false,
+      "login": null,
+      "secureNote": {
+        "type": 0
+      },
+      "card": null,
+      "identity": null,
+      "collectionIds": [],
+      "creationDate": "2024-02-01T12:00:00.000Z",
+      "revisionDate": "2024-02-01T12:00:00.000Z",
+      "reprompt": 0,
+      "fields": null
+    },
+    {
+      "id": "card-1",
+      "organizationId": null,
+      "folderId": "folder-2",
+      "type": 3,
+      "name": "Personal Visa",
+      "notes": "Primary credit card",
+      "favorite": false,
+      "login": null,
+      "secureNote": null,
+      "card": {
+        "cardholderName": "John Doe",
+        "brand": "Visa",
+        "number": "4111111111111111",
+        "expMonth": "12",
+        "expYear": "2027",
+        "code": "123"
+      },
+      "identity": null,
+      "collectionIds": [],
+      "creationDate": "2023-12-01T00:00:00.000Z",
+      "revisionDate": "2024-01-01T00:00:00.000Z",
+      "reprompt": 1,
+      "fields": null
+    },
+    {
+      "id": "identity-1",
+      "organizationId": null,
+      "folderId": null,
+      "type": 4,
+      "name": "Personal Identity",
+      "notes": "Emergency contact: Jane Doe (555-1234)",
+      "favorite": false,
+      "login": null,
+      "secureNote": null,
+      "card": null,
+      "identity": {
+        "title": "Mr",
+        "firstName": "John",
+        "middleName": "William",
+        "lastName": "Doe",
+        "address1": "123 Main Street",
+        "address2": "Apt 4B",
+        "address3": "",
+        "city": "New York",
+        "state": "NY",
+        "postalCode": "10001",
+        "country": "United States",
+        "company": "Acme Corp",
+        "email": "john.doe@example.com",
+        "phone": "555-0123",
+        "ssn": "123-45-6789",
+        "username": "johndoe",
+        "passportNumber": "AB1234567",
+        "licenseNumber": "D1234567"
+      },
+      "collectionIds": [],
+      "creationDate": "2023-01-01T00:00:00.000Z",
+      "revisionDate": "2024-05-01T00:00:00.000Z",
+      "reprompt": 0,
+      "fields": [
+        {
+          "name": "Mother's maiden name",
+          "value": "Smith",
+          "type": 1
+        }
+      ]
+    },
+    {
+      "id": "login-3",
+      "organizationId": null,
+      "folderId": "folder-1",
+      "type": 1,
+      "name": "AWS Console",
+      "notes": "",
+      "favorite": true,
+      "login": {
+        "uris": [
+          {
+            "uri": "https://console.aws.amazon.com",
+            "match": null
+          }
+        ],
+        "username": "aws-admin",
+        "password": "cloudpass789",
+        "totp": ""
+      },
+      "secureNote": null,
+      "card": null,
+      "identity": null,
+      "collectionIds": [],
+      "creationDate": "2024-01-01T00:00:00.000Z",
+      "revisionDate": "2024-01-01T00:00:00.000Z",
+      "reprompt": 0,
+      "fields": [
+        {
+          "name": "Account ID",
+          "value": "123456789012",
+          "type": 0
+        },
+        {
+          "name": "Region",
+          "value": "us-east-1",
+          "type": 0
+        }
+      ]
+    }
+  ]
+}

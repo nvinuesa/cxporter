@@ -1,5 +1,9 @@
 # cxporter
 
+[![Build Status](https://github.com/nvinuesa/cxporter/workflows/CI/badge.svg)](https://github.com/nvinuesa/cxporter/actions)
+[![Go Report Card](https://goreportcard.com/badge/github.com/nvinuesa/cxporter)](https://goreportcard.com/report/github.com/nvinuesa/cxporter)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+
 Convert credentials from legacy password managers to the FIDO Alliance CXF format.
 
 ## Overview

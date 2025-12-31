@@ -4,25 +4,24 @@
 *.dll
 *.so
 *.dylib
+/cxporter
 
 # Test binary, built with `go test -c`
 *.test
 
-# Output of the go coverage tool, specifically when used with LiteIDE
-*.out
-
-# Go coverage files
+# Output of the go coverage tool
+coverage.out
 coverage.html
 coverage.txt
 
-# Dependency directories (usually vendor)
+# Dependency directories
 vendor/
 
 # Go workspace file
 go.work
 go.work.sum
 
-# Compiled Object files, Static libraries. C stuff for CGO
+# Compiled Object files, Static libraries
 *.o
 *.a
 
@@ -48,6 +47,8 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+tmp/
+temp/
 
 # Build artifacts
 bin/
@@ -56,6 +57,15 @@ dist/
 # Environment files
 .env
 .env.local
+.env.*.local
+
+# Debug files
+debug
+
+# Test fixtures that might contain real credentials (not testdata/)
+*.kdbx.real
+*.csv.real
+*.json.real
 
 # Project-specific documentation files
 AGENTS.md

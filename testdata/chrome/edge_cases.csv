@@ -1,0 +1,6 @@
+name,url,username,password,note
+"Site with, comma",https://comma.example.com,user1,"pass,with,commas","Note with, comma"
+"Quoted ""Name""",https://quoted.example.com,user2,pass2,"Has ""quotes"""
+Unicode Site,https://unicode.example.com,用户,密码,中文备注
+Empty Row Test,,,,
+Whitespace,  https://whitespace.example.com  ,  user  ,  pass  ,  note

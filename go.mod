@@ -8,6 +8,7 @@ require (
 )
 
 require (
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/tobischo/argon2 v0.1.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 )

@@ -1,0 +1,4 @@
+"url","username","password","httpRealm","formActionOrigin","guid","timeCreated","timeLastUsed","timePasswordChanged"
+"https://example.com","user@example.com","password123","","https://example.com/login","{abc12345-1234-1234-1234-abcdef123456}","1704067200000","1704067200000","1704067200000"
+"https://github.com","devuser","ghtoken","","https://github.com/session","{def67890-5678-5678-5678-ghijkl567890}","1701388800000","1704067200000","1703980800000"
+"http://intranet.company.com","admin","adminpass","Corporate Intranet","","{hij11111-1111-1111-1111-mnopqr111111}","1699833600000","1704067200000","1702771200000"

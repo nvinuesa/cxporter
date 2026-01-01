@@ -16,8 +16,8 @@ var versionCmd = &cobra.Command{
 
 func runVersion(cmd *cobra.Command, args []string) {
 	fmt.Printf("cxporter %s\n", Version)
-	fmt.Printf("  Git commit: %s\n", GitCommit)
-	fmt.Printf("  Build date: %s\n", BuildDate)
-	fmt.Printf("  Go version: %s\n", runtime.Version())
-	fmt.Printf("  OS/Arch:    %s/%s\n", runtime.GOOS, runtime.GOARCH)
+	fmt.Printf("Git commit: %s\n", GitCommit)
+	fmt.Printf("Build date: %s\n", BuildDate)
+	fmt.Printf("Go version: %s\n", runtime.Version())
+	fmt.Printf("OS/Arch:    %s/%s\n", runtime.GOOS, runtime.GOARCH)
 }

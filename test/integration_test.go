@@ -431,7 +431,7 @@ func TestCLIConvert(t *testing.T) {
 	defer os.Remove(tmpFile.Name())
 
 	// Run CLI convert command
-	cmd := exec.Command(binaryPath, "convert", "-s", "chrome", "-i", csvPath, "-o", tmpFile.Name(), "-q")
+	cmd := exec.Command(binaryPath, "convert", csvPath, "-o", tmpFile.Name())
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
@@ -475,7 +475,7 @@ func TestCLIPreview(t *testing.T) {
 	}
 
 	// Run CLI preview command
-	cmd := exec.Command(binaryPath, "preview", "-s", "chrome", "-i", csvPath)
+	cmd := exec.Command(binaryPath, "preview", "-s", "chrome", csvPath)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -515,26 +515,7 @@ func TestCLIVersion(t *testing.T) {
 }
 
 func TestCLISources(t *testing.T) {
-	binaryPath := getBinaryPath()
-	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
-		t.Skip("Binary not built; run 'make build' first")
-	}
-
-	cmd := exec.Command(binaryPath, "sources")
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("CLI sources failed: %v", err)
-	}
-
-	output := stdout.String()
-	expectedSources := []string{"chrome", "firefox", "bitwarden", "keepass", "ssh"}
-	for _, source := range expectedSources {
-		if !strings.Contains(output, source) {
-			t.Errorf("Sources output should list '%s'", source)
-		}
-	}
+	t.Skip("sources command has been removed - sources are listed in help text")
 }
 
 func TestAutoDetection(t *testing.T) {

@@ -33,6 +33,22 @@ test:
 	$(GOTEST) -v -race -coverprofile=coverage.out -covermode=atomic ./...
 	@$(GOCMD) tool cover -func=coverage.out | tail -1
 
+# Run unit tests only
+.PHONY: test-unit
+test-unit:
+	$(GOTEST) -v -race -coverprofile=coverage.out -covermode=atomic ./...
+	@$(GOCMD) tool cover -func=coverage.out | tail -1
+
+# Run bash integration tests
+.PHONY: test-integration
+test-integration: build
+	@echo "Running integration tests..."
+	@./test/run_all.sh
+
+# Run all tests (unit + integration)
+.PHONY: test-all
+test-all: test-unit test-integration
+
 # Run tests with HTML coverage report
 .PHONY: test-coverage
 test-coverage: test
@@ -85,15 +101,18 @@ run: build
 .PHONY: help
 help:
 	@echo "Available targets:"
-	@echo "  build         - Build the binary to ./bin/"
-	@echo "  test          - Run tests with coverage"
-	@echo "  test-coverage - Run tests and generate HTML coverage report"
-	@echo "  lint          - Run golangci-lint"
-	@echo "  fmt           - Format code"
-	@echo "  vet           - Run go vet"
-	@echo "  clean         - Remove build artifacts"
-	@echo "  deps          - Download and tidy dependencies"
-	@echo "  verify        - Verify dependencies"
-	@echo "  install       - Install binary to GOPATH/bin"
-	@echo "  run           - Build and run the application"
-	@echo "  help          - Show this help"
+	@echo "  build            - Build the binary to ./bin/"
+	@echo "  test             - Run tests with coverage"
+	@echo "  test-unit        - Run unit tests only"
+	@echo "  test-integration - Run bash integration tests"
+	@echo "  test-all         - Run all tests (unit + integration)"
+	@echo "  test-coverage    - Run tests and generate HTML coverage report"
+	@echo "  lint             - Run golangci-lint"
+	@echo "  fmt              - Format code"
+	@echo "  vet              - Run go vet"
+	@echo "  clean            - Remove build artifacts"
+	@echo "  deps             - Download and tidy dependencies"
+	@echo "  verify           - Verify dependencies"
+	@echo "  install          - Install binary to GOPATH/bin"
+	@echo "  run              - Build and run the application"
+	@echo "  help             - Show this help"

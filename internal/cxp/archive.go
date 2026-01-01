@@ -5,8 +5,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/nvinuesa/go-cxf"
+	"github.com/nvinuesa/cxporter/internal/security"
 )
 
 // Archive directory structure.
@@ -87,6 +89,16 @@ func CreateArchive(header *cxf.Header, hpke *HPKEContext) ([]byte, error) {
 	// Write each item as a separate encrypted document
 	for _, account := range header.Accounts {
 		for _, item := range account.Items {
+			// Validate item ID to prevent path traversal
+			if err := security.ValidateCredentialID(item.ID); err != nil {
+				return nil, fmt.Errorf("invalid item ID %q: %w", item.ID, err)
+			}
+			
+			// Additional safety: ensure ID doesn't contain path separators after validation
+			if strings.ContainsAny(item.ID, "/\\") {
+				return nil, fmt.Errorf("item ID contains path separators: %s", item.ID)
+			}
+			
 			itemJSON, err := json.Marshal(item)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal item %s: %w", item.ID, err)

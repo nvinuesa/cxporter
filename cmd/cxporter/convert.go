@@ -250,12 +250,20 @@ func needsPassword(sourceName string) bool {
 
 // promptPassword prompts the user for a password securely.
 func promptPassword(prompt string) (string, error) {
+	// Verify stdin is a terminal to prevent passwords from being logged
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return "", fmt.Errorf("password prompt requires interactive terminal (use --password flag for non-interactive use)")
+	}
+	
 	fmt.Fprint(os.Stderr, prompt)
 	password, err := term.ReadPassword(int(os.Stdin.Fd()))
 	fmt.Fprintln(os.Stderr) // newline after password
 	if err != nil {
 		return "", err
 	}
+	
+	// Note: Password is returned as string for compatibility with existing APIs
+	// Callers should clear it from memory after use if possible
 	return string(password), nil
 }
 

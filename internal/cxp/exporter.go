@@ -40,9 +40,9 @@ func Export(header *cxf.Header, opts ExportOptions) error {
 		return ErrNoOutputPath
 	}
 
-	// Ensure parent directory exists
+	// Ensure parent directory exists with secure permissions
 	dir := filepath.Dir(opts.OutputPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
 

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	
+	"github.com/nvinuesa/cxporter/internal/security"
 )
 
 // Validation errors.
@@ -31,9 +33,62 @@ func (c *Credential) Validate() error {
 		return ErrEmptyCredential
 	}
 
-	// ID is always required
-	if c.ID == "" {
-		return ErrMissingID
+	// ID is always required and must be valid
+	if err := security.ValidateCredentialID(c.ID); err != nil {
+		return fmt.Errorf("invalid credential ID: %w", err)
+	}
+	
+	// Validate string lengths to prevent DoS
+	if err := security.ValidateStringLength(c.Title, security.MaxTitleLength, "title"); err != nil {
+		return err
+	}
+	if err := security.ValidateStringLength(c.Username, security.MaxUsernameLength, "username"); err != nil {
+		return err
+	}
+	if err := security.ValidateStringLength(c.Password, security.MaxPasswordLength, "password"); err != nil {
+		return err
+	}
+	if err := security.ValidateStringLength(c.URL, security.MaxURLLength, "URL"); err != nil {
+		return err
+	}
+	if err := security.ValidateStringLength(c.Notes, security.MaxNotesLength, "notes"); err != nil {
+		return err
+	}
+	if err := security.ValidateStringLength(c.FolderPath, security.MaxFolderPathLength, "folder path"); err != nil {
+		return err
+	}
+	
+	// Validate tags
+	if len(c.Tags) > security.MaxTagCount {
+		return fmt.Errorf("too many tags: %d (max %d)", len(c.Tags), security.MaxTagCount)
+	}
+	for _, tag := range c.Tags {
+		if err := security.ValidateStringLength(tag, security.MaxTagLength, "tag"); err != nil {
+			return err
+		}
+	}
+	
+	// Validate custom fields
+	for key, value := range c.CustomFields {
+		if err := security.ValidateStringLength(key, security.MaxCustomFieldKey, "custom field key"); err != nil {
+			return err
+		}
+		if err := security.ValidateStringLength(value, security.MaxCustomFieldValue, "custom field value"); err != nil {
+			return err
+		}
+	}
+	
+	// Validate attachments
+	if len(c.Attachments) > security.MaxAttachmentCount {
+		return fmt.Errorf("too many attachments: %d (max %d)", len(c.Attachments), security.MaxAttachmentCount)
+	}
+	for i, att := range c.Attachments {
+		if err := security.ValidateAttachmentSize(len(att.Data)); err != nil {
+			return fmt.Errorf("attachment %d: %w", i, err)
+		}
+		if security.HasDangerousFileExtension(att.Name) {
+			return fmt.Errorf("attachment %d has dangerous file extension: %s", i, att.Name)
+		}
 	}
 
 	// Title is recommended but not strictly required for all types

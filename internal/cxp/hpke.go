@@ -223,7 +223,11 @@ func (h *HPKEContext) EncryptToJWE(plaintext []byte) ([]byte, error) {
 
 	protectedHeader := base64.RawURLEncoding.EncodeToString(headerJSON)
 
+	// Store current nonce before encryption (for IV in JWE)
+	currentNonce := h.computeNonce()
+	
 	// Encrypt plaintext (AAD is the protected header)
+	// Note: Encrypt() will increment seq after computing nonce
 	aad := []byte(protectedHeader)
 	ciphertext, err := h.Encrypt(plaintext, aad)
 	if err != nil {
@@ -239,12 +243,9 @@ func (h *HPKEContext) EncryptToJWE(plaintext []byte) ([]byte, error) {
 
 	// JWE Compact Serialization: header.encryptedKey.iv.ciphertext.tag
 	// For HPKE, encrypted_key is empty (key is derived from epk)
-	iv := h.computeNonce()
-	h.seq-- // Revert since computeNonce incremented, and we want consistent IV
-
 	jwe := fmt.Sprintf("%s..%s.%s.%s",
 		protectedHeader,
-		base64.RawURLEncoding.EncodeToString(iv),
+		base64.RawURLEncoding.EncodeToString(currentNonce),
 		base64.RawURLEncoding.EncodeToString(ct),
 		base64.RawURLEncoding.EncodeToString(tag),
 	)

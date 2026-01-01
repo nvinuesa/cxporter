@@ -56,7 +56,7 @@ func SanitizeString(s string) string {
 // ValidateCredentialID ensures a credential ID is safe and valid.
 func ValidateCredentialID(id string) error {
 	if id == "" {
-		return fmt.Errorf("credential ID cannot be empty")
+		return fmt.Errorf("credential ID is required")
 	}
 	
 	if err := ValidateStringLength(id, MaxCredentialIDLength, "credential ID"); err != nil {

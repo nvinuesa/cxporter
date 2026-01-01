@@ -13,10 +13,11 @@ import (
 
 // Archive directory structure.
 const (
-	archiveRootDir     = "CXP-Export/"
-	archiveIndexFile   = "CXP-Export/index.jwe"
-	archiveDocsDir     = "CXP-Export/documents/"
-	archiveDocFileFmt  = "CXP-Export/documents/%s.jwe"
+	archiveRootDir      = "CXP-Export/"
+	archiveManifestFile = "CXP-Export/manifest.json"
+	archiveIndexFile    = "CXP-Export/index.jwe"
+	archiveDocsDir      = "CXP-Export/documents/"
+	archiveDocFileFmt   = "CXP-Export/documents/%s.jwe"
 )
 
 // IndexDocument contains account metadata without secrets.
@@ -50,10 +51,13 @@ type IndexItem struct {
 	Tags       []string            `json:"tags,omitempty"`
 }
 
-// CreateArchive builds the CXP ZIP archive structure.
+// CreateArchive builds the CXP ZIP archive structure with manifest.
 func CreateArchive(header *cxf.Header, hpke *HPKEContext) ([]byte, error) {
 	buf := new(bytes.Buffer)
 	zipWriter := zip.NewWriter(buf)
+
+	// Track all archive contents for manifest
+	archiveContents := make(map[string][]byte)
 
 	// Create root directory
 	if _, err := zipWriter.Create(archiveRootDir); err != nil {
@@ -85,6 +89,7 @@ func CreateArchive(header *cxf.Header, hpke *HPKEContext) ([]byte, error) {
 	if _, err := indexFile.Write(indexJWE); err != nil {
 		return nil, fmt.Errorf("failed to write index file: %w", err)
 	}
+	archiveContents[archiveIndexFile] = indexJWE
 
 	// Write each item as a separate encrypted document
 	for _, account := range header.Accounts {
@@ -117,7 +122,27 @@ func CreateArchive(header *cxf.Header, hpke *HPKEContext) ([]byte, error) {
 			if _, err := itemFile.Write(itemJWE); err != nil {
 				return nil, fmt.Errorf("failed to write item file %s: %w", item.ID, err)
 			}
+			archiveContents[itemPath] = itemJWE
 		}
+	}
+
+	// Build and write manifest
+	manifest, err := BuildManifest(header, archiveContents)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build manifest: %w", err)
+	}
+
+	manifestJSON, err := manifest.MarshalJSON()
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal manifest: %w", err)
+	}
+
+	manifestFile, err := zipWriter.Create(archiveManifestFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create manifest file: %w", err)
+	}
+	if _, err := manifestFile.Write(manifestJSON); err != nil {
+		return nil, fmt.Errorf("failed to write manifest file: %w", err)
 	}
 
 	if err := zipWriter.Close(); err != nil {

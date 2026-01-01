@@ -35,7 +35,7 @@ func (c *Credential) Validate() error {
 
 	// ID is always required and must be valid
 	if err := security.ValidateCredentialID(c.ID); err != nil {
-		return fmt.Errorf("invalid credential ID: %w", err)
+		return err
 	}
 	
 	// Validate string lengths to prevent DoS

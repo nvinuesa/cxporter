@@ -167,11 +167,14 @@ func ValidateScope(scope *cxf.CredentialScope) error {
 
 // ValidateArchiveStructure validates the structure of a CXP archive.
 func ValidateArchiveStructure(files []string) error {
+	hasManifest := false
 	hasIndex := false
 	hasDocsDir := false
 
 	for _, file := range files {
 		switch file {
+		case archiveManifestFile:
+			hasManifest = true
 		case archiveIndexFile:
 			hasIndex = true
 		case archiveDocsDir:
@@ -179,6 +182,9 @@ func ValidateArchiveStructure(files []string) error {
 		}
 	}
 
+	if !hasManifest {
+		return fmt.Errorf("archive missing required manifest file")
+	}
 	if !hasIndex {
 		return fmt.Errorf("archive missing required index file")
 	}

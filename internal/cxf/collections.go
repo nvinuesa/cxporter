@@ -49,7 +49,7 @@ func BuildCollections(creds []model.Credential) []cxf.Collection {
 	return treeToCollections(root)
 }
 
-// splitPath splits a folder path into parts.
+// splitPath splits a folder path into parts, sanitizing for path traversal attacks.
 func splitPath(path string) []string {
 	// Normalize path separators
 	path = strings.ReplaceAll(path, "\\", "/")
@@ -64,13 +64,23 @@ func splitPath(path string) []string {
 	// Split by /
 	parts := strings.Split(path, "/")
 
-	// Filter empty parts
+	// Filter empty parts and sanitize for path traversal
 	result := make([]string, 0, len(parts))
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
-		if part != "" {
-			result = append(result, part)
+		if part == "" {
+			continue
 		}
+
+		// Prevent path traversal attacks
+		// Skip ".." and "." components that could escape the collection hierarchy
+		if part == ".." || part == "." {
+			continue
+		}
+
+		// Also sanitize any hidden directory markers at the start (optional security hardening)
+		// but allow legitimate folder names that happen to start with a dot (like ".config")
+		result = append(result, part)
 	}
 
 	return result

@@ -279,7 +279,8 @@ func (s *FirefoxSource) Read() ([]model.Credential, error) {
 func (s *FirefoxSource) parseRecord(record []string, colIndex map[string]int, lineNum int) (*model.Credential, error) {
 	getField := func(name string) string {
 		if idx, ok := colIndex[name]; ok && idx < len(record) {
-			return strings.TrimSpace(record[idx])
+			// Sanitize for CSV/formula injection
+			return sanitizeCSVField(strings.TrimSpace(record[idx]))
 		}
 		return ""
 	}

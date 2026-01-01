@@ -13,10 +13,9 @@ import (
 )
 
 var previewFlags struct {
-	source   string
-	password string
-	keyFile  string
-	filter   string
+	source  string
+	keyFile string
+	filter  string
 }
 
 var previewCmd = &cobra.Command{
@@ -42,7 +41,6 @@ Examples:
 
 func init() {
 	previewCmd.Flags().StringVarP(&previewFlags.source, "source", "s", "", "source type (keepass|chrome|firefox|bitwarden|ssh)")
-	previewCmd.Flags().StringVarP(&previewFlags.password, "password", "p", "", "password for encrypted sources")
 	previewCmd.Flags().StringVarP(&previewFlags.keyFile, "key-file", "k", "", "key file path (for KeePass)")
 	previewCmd.Flags().StringVarP(&previewFlags.filter, "filter", "f", "", "filter by tag, folder, or title substring")
 }
@@ -130,17 +128,14 @@ func getPreviewSourceAdapter(sourceName, inputPath string) (sources.Source, erro
 }
 
 // openPreviewSource opens the source adapter with authentication if needed.
+// Passwords are only accepted via interactive prompt for security.
 func openPreviewSource(source sources.Source, inputPath string) error {
 	opts := sources.OpenOptions{}
 
 	if needsPassword(source.Name()) {
-		password := previewFlags.password
-		if password == "" {
-			var err error
-			password, err = promptPassword(fmt.Sprintf("Enter password for %s: ", inputPath))
-			if err != nil {
-				return fmt.Errorf("failed to read password: %w", err)
-			}
+		password, err := promptPassword(fmt.Sprintf("Enter password for %s: ", inputPath))
+		if err != nil {
+			return fmt.Errorf("failed to read password: %w", err)
 		}
 		opts.Password = password
 		opts.KeyFilePath = previewFlags.keyFile

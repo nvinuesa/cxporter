@@ -260,7 +260,8 @@ func (s *ChromeSource) Read() ([]model.Credential, error) {
 func (s *ChromeSource) parseRecord(record []string, colIndex map[string]int, lineNum int) (*model.Credential, error) {
 	getField := func(name string) string {
 		if idx, ok := colIndex[name]; ok && idx < len(record) {
-			return strings.TrimSpace(record[idx])
+			// Sanitize for CSV/formula injection
+			return sanitizeCSVField(strings.TrimSpace(record[idx]))
 		}
 		return ""
 	}
@@ -352,6 +353,27 @@ func (r *bomSkippingReader) Read(p []byte) (int, error) {
 		return n, nil
 	}
 	return r.r.Read(p)
+}
+
+// sanitizeCSVField removes or escapes formula injection characters.
+// CSV fields starting with =, +, -, @, tab, or carriage return
+// can trigger formula execution in spreadsheet applications.
+func sanitizeCSVField(s string) string {
+	if s == "" {
+		return s
+	}
+
+	// Check for formula injection prefixes
+	// These characters can trigger formula execution in Excel, LibreOffice, etc.
+	firstChar := s[0]
+	if firstChar == '=' || firstChar == '+' || firstChar == '-' || firstChar == '@' ||
+		firstChar == '\t' || firstChar == '\r' {
+		// Prefix with a single quote to escape the formula
+		// This is a common mitigation that prevents formula execution
+		return "'" + s
+	}
+
+	return s
 }
 
 // init registers the Chrome source with the default registry.

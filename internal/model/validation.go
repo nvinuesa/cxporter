@@ -145,8 +145,13 @@ func ValidateTOTP(t *TOTPData) error {
 		return ErrInvalidTOTPDigits
 	}
 
-	// Validate period
+	// Validate period - must be positive and within reasonable range
+	// Period = 0 would cause division by zero in TOTP calculation
+	// Standard values are 30 or 60 seconds; allow up to 300 (5 minutes) for edge cases
 	if t.Period < 0 {
+		return ErrInvalidTOTPPeriod
+	}
+	if t.Period != 0 && (t.Period < 1 || t.Period > 300) {
 		return ErrInvalidTOTPPeriod
 	}
 

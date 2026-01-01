@@ -3,6 +3,7 @@ package cxp
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -23,13 +24,25 @@ var (
 	ErrInvalidPublicKey  = errors.New("invalid public key: must be 32 bytes for X25519")
 	ErrEncryptionFailed  = errors.New("encryption failed")
 	ErrUnsupportedParams = errors.New("unsupported HPKE parameters")
+	ErrHKDFExpandFailed  = errors.New("HKDF expand failed")
 )
 
 // HPKE constants per RFC 9180.
 const (
 	x25519KeySize = 32
-	nonceSize     = 12
+	nonceSize     = 12 // Nn for AES-256-GCM
 	tagSize       = 16
+	keySize       = 32 // Nk for AES-256-GCM
+	hashSize      = 32 // Nh for HKDF-SHA256
+)
+
+// Suite IDs per RFC 9180
+var (
+	// KEM suite ID: "KEM" || I2OSP(kem_id, 2)
+	kemSuiteID = []byte{0x4b, 0x45, 0x4d, 0x00, 0x20} // "KEM" || 0x0020 (DHKEM X25519)
+
+	// HPKE suite ID: "HPKE" || I2OSP(kem_id, 2) || I2OSP(kdf_id, 2) || I2OSP(aead_id, 2)
+	hpkeSuiteID = []byte{0x48, 0x50, 0x4b, 0x45, 0x00, 0x20, 0x00, 0x01, 0x00, 0x02}
 )
 
 // HPKEContext holds encryption state for a single export.
@@ -94,35 +107,66 @@ func NewHPKEContext(recipientPubKey []byte, params cxp.HpkeParameters) (*HPKECon
 	return ctx, nil
 }
 
-// keySchedule derives AEAD key and base nonce per RFC 9180.
-func (h *HPKEContext) keySchedule(sharedSecret, enc, pkR []byte) error {
-	// HPKE suite ID for X25519, HKDF-SHA256, AES-256-GCM
-	suiteID := []byte("HPKE")
-	suiteID = append(suiteID, 0x00, 0x20) // KEM ID: X25519 (0x0020)
-	suiteID = append(suiteID, 0x00, 0x01) // KDF ID: HKDF-SHA256 (0x0001)
-	suiteID = append(suiteID, 0x00, 0x02) // AEAD ID: AES-256-GCM (0x0002)
+// keySchedule derives AEAD key and base nonce per RFC 9180 Section 5.1.
+// This implements the KeyScheduleS (sender) for base mode.
+func (h *HPKEContext) keySchedule(dh, enc, pkR []byte) error {
+	// Step 1: Compute shared_secret from KEM using ExtractAndExpand
+	// Per RFC 9180 Section 4.1: shared_secret = ExtractAndExpand(dh, kem_context)
+	kemContext := make([]byte, 0, len(enc)+len(pkR))
+	kemContext = append(kemContext, enc...)
+	kemContext = append(kemContext, pkR...)
+
+	sharedSecret, err := extractAndExpand(dh, kemContext)
+	if err != nil {
+		return fmt.Errorf("failed to compute shared secret: %w", err)
+	}
+
+	// Step 2: KeySchedule per RFC 9180 Section 5.1
+	// For base mode: psk = "" and psk_id = ""
+	psk := []byte{}
+	pskID := []byte{}
+	info := []byte{} // Empty info for CXP
+
+	// mode = 0x00 for base mode
+	mode := byte(0x00)
+
+	// psk_id_hash = LabeledExtract("", "psk_id_hash", psk_id)
+	pskIDHash, err := labeledExtract(hpkeSuiteID, nil, []byte("psk_id_hash"), pskID)
+	if err != nil {
+		return fmt.Errorf("failed to compute psk_id_hash: %w", err)
+	}
+
+	// info_hash = LabeledExtract("", "info_hash", info)
+	infoHash, err := labeledExtract(hpkeSuiteID, nil, []byte("info_hash"), info)
+	if err != nil {
+		return fmt.Errorf("failed to compute info_hash: %w", err)
+	}
 
 	// ks_context = mode || psk_id_hash || info_hash
-	// For base mode with no PSK and empty info:
-	pskIDHash := sha256.Sum256(nil)
-	infoHash := sha256.Sum256(nil)
+	ksContext := make([]byte, 0, 1+hashSize+hashSize)
+	ksContext = append(ksContext, mode)
+	ksContext = append(ksContext, pskIDHash...)
+	ksContext = append(ksContext, infoHash...)
 
-	ksContext := []byte{0x00} // mode = base
-	ksContext = append(ksContext, pskIDHash[:]...)
-	ksContext = append(ksContext, infoHash[:]...)
+	// secret = LabeledExtract(shared_secret, "secret", psk)
+	secret, err := labeledExtract(hpkeSuiteID, sharedSecret, []byte("secret"), psk)
+	if err != nil {
+		return fmt.Errorf("failed to compute secret: %w", err)
+	}
 
-	// Extract shared secret
-	// kem_context = enc || pkR
-	kemContext := append(enc, pkR...)
+	// key = LabeledExpand(secret, "key", ks_context, Nk)
+	key, err := labeledExpand(hpkeSuiteID, secret, []byte("key"), ksContext, keySize)
+	if err != nil {
+		return fmt.Errorf("failed to derive key: %w", err)
+	}
 
-	// shared_secret = ExtractAndExpand(dh, kem_context)
-	extractedSecret := hkdfExtract(sharedSecret, suiteID, kemContext)
+	// base_nonce = LabeledExpand(secret, "base_nonce", ks_context, Nn)
+	h.baseNonce, err = labeledExpand(hpkeSuiteID, secret, []byte("base_nonce"), ksContext, nonceSize)
+	if err != nil {
+		return fmt.Errorf("failed to derive base_nonce: %w", err)
+	}
 
-	// Derive key and nonce
-	keySize := 32 // AES-256
-	key := hkdfExpandLabel(extractedSecret, suiteID, "key", ksContext, keySize)
-	h.baseNonce = hkdfExpandLabel(extractedSecret, suiteID, "base_nonce", ksContext, nonceSize)
-	h.sharedSecret = extractedSecret
+	h.sharedSecret = sharedSecret
 
 	// Create AES-GCM cipher
 	block, err := aes.NewCipher(key)
@@ -138,44 +182,70 @@ func (h *HPKEContext) keySchedule(sharedSecret, enc, pkR []byte) error {
 	return nil
 }
 
-// hkdfExtract performs HKDF-Extract with labeled secret.
-func hkdfExtract(secret, suiteID, context []byte) []byte {
-	// labeled_ikm = "HPKE-v1" || suite_id || "shared_secret" || secret
-	labeledIKM := []byte("HPKE-v1")
-	labeledIKM = append(labeledIKM, suiteID...)
-	labeledIKM = append(labeledIKM, []byte("shared_secret")...)
-	labeledIKM = append(labeledIKM, secret...)
+// extractAndExpand implements the KEM's ExtractAndExpand per RFC 9180 Section 4.1.
+// shared_secret = ExtractAndExpand(dh, kem_context)
+func extractAndExpand(dh, kemContext []byte) ([]byte, error) {
+	// eae_prk = LabeledExtract("", "eae_prk", dh)
+	eaePRK, err := labeledExtract(kemSuiteID, nil, []byte("eae_prk"), dh)
+	if err != nil {
+		return nil, err
+	}
 
-	// psk_input_hash for base mode (empty PSK)
-	pskInputHash := sha256.Sum256(nil)
-
-	// labeled_info for ExtractAndExpand
-	labeledInfo := []byte("HPKE-v1")
-	labeledInfo = append(labeledInfo, suiteID...)
-	labeledInfo = append(labeledInfo, []byte("eae_prk")...)
-	labeledInfo = append(labeledInfo, context...)
-
-	// HKDF-Extract with labeled inputs
-	reader := hkdf.New(sha256.New, labeledIKM, pskInputHash[:], labeledInfo)
-	extracted := make([]byte, 32)
-	reader.Read(extracted)
-	return extracted
+	// shared_secret = LabeledExpand(eae_prk, "shared_secret", kem_context, Nsecret)
+	// For DHKEM(X25519), Nsecret = 32
+	return labeledExpand(kemSuiteID, eaePRK, []byte("shared_secret"), kemContext, 32)
 }
 
-// hkdfExpandLabel performs HKDF-Expand with labeled info.
-func hkdfExpandLabel(secret, suiteID []byte, label string, context []byte, length int) []byte {
-	// labeled_info = I2OSP(L, 2) || "HPKE-v1" || suite_id || label || context
-	labeledInfo := make([]byte, 2)
+// labeledExtract implements LabeledExtract per RFC 9180 Section 4.
+// LabeledExtract(salt, label, ikm) = Extract(salt, labeled_ikm)
+// where labeled_ikm = "HPKE-v1" || suite_id || label || ikm
+func labeledExtract(suiteID, salt, label, ikm []byte) ([]byte, error) {
+	// labeled_ikm = "HPKE-v1" || suite_id || label || ikm
+	labeledIKM := make([]byte, 0, 7+len(suiteID)+len(label)+len(ikm))
+	labeledIKM = append(labeledIKM, []byte("HPKE-v1")...)
+	labeledIKM = append(labeledIKM, suiteID...)
+	labeledIKM = append(labeledIKM, label...)
+	labeledIKM = append(labeledIKM, ikm...)
+
+	// HKDF-Extract(salt, labeled_ikm)
+	// If salt is nil/empty, use zero-filled salt of hash length
+	if len(salt) == 0 {
+		salt = make([]byte, hashSize)
+	}
+	return hkdfExtract(salt, labeledIKM), nil
+}
+
+// hkdfExtract performs HKDF-Extract per RFC 5869.
+// Extract(salt, IKM) -> PRK
+func hkdfExtract(salt, ikm []byte) []byte {
+	h := hmac.New(sha256.New, salt)
+	h.Write(ikm)
+	return h.Sum(nil)
+}
+
+// labeledExpand implements LabeledExpand per RFC 9180 Section 4.
+// LabeledExpand(prk, label, info, L) = Expand(prk, labeled_info, L)
+// where labeled_info = I2OSP(L, 2) || "HPKE-v1" || suite_id || label || info
+func labeledExpand(suiteID, prk, label, info []byte, length int) ([]byte, error) {
+	// labeled_info = I2OSP(L, 2) || "HPKE-v1" || suite_id || label || info
+	labeledInfo := make([]byte, 2, 2+7+len(suiteID)+len(label)+len(info))
 	binary.BigEndian.PutUint16(labeledInfo, uint16(length))
 	labeledInfo = append(labeledInfo, []byte("HPKE-v1")...)
 	labeledInfo = append(labeledInfo, suiteID...)
-	labeledInfo = append(labeledInfo, []byte(label)...)
-	labeledInfo = append(labeledInfo, context...)
+	labeledInfo = append(labeledInfo, label...)
+	labeledInfo = append(labeledInfo, info...)
 
-	reader := hkdf.New(sha256.New, secret, nil, labeledInfo)
+	// HKDF-Expand(prk, labeled_info, L)
+	reader := hkdf.Expand(sha256.New, prk, labeledInfo)
 	expanded := make([]byte, length)
-	reader.Read(expanded)
-	return expanded
+	n, err := io.ReadFull(reader, expanded)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrHKDFExpandFailed, err)
+	}
+	if n != length {
+		return nil, fmt.Errorf("%w: short read", ErrHKDFExpandFailed)
+	}
+	return expanded, nil
 }
 
 // computeNonce XORs base nonce with sequence number.
@@ -223,7 +293,11 @@ func (h *HPKEContext) EncryptToJWE(plaintext []byte) ([]byte, error) {
 
 	protectedHeader := base64.RawURLEncoding.EncodeToString(headerJSON)
 
+	// Compute the IV BEFORE encrypting (captures current sequence number)
+	iv := h.computeNonce()
+
 	// Encrypt plaintext (AAD is the protected header)
+	// Note: Encrypt() will increment seq, but we already captured the correct IV
 	aad := []byte(protectedHeader)
 	ciphertext, err := h.Encrypt(plaintext, aad)
 	if err != nil {
@@ -239,9 +313,6 @@ func (h *HPKEContext) EncryptToJWE(plaintext []byte) ([]byte, error) {
 
 	// JWE Compact Serialization: header.encryptedKey.iv.ciphertext.tag
 	// For HPKE, encrypted_key is empty (key is derived from epk)
-	iv := h.computeNonce()
-	h.seq-- // Revert since computeNonce incremented, and we want consistent IV
-
 	jwe := fmt.Sprintf("%s..%s.%s.%s",
 		protectedHeader,
 		base64.RawURLEncoding.EncodeToString(iv),

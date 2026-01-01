@@ -18,6 +18,20 @@ var (
 	ErrMissingExporter = errors.New("exporter name is required")
 )
 
+// PCIWarning represents a PCI-DSS compliance warning.
+// PCI-DSS 4.0.1 Section 3.3.1 prohibits storing CVV and PIN.
+type PCIWarning struct {
+	CredentialTitle string
+	HasCVV          bool
+	HasPIN          bool
+}
+
+// GenerationResult contains the generated header and any warnings.
+type GenerationResult struct {
+	Header      *cxf.Header
+	PCIWarnings []PCIWarning
+}
+
 // GeneratorOptions configures CXF generation.
 type GeneratorOptions struct {
 	// ExporterRpID is the FIDO RP ID of the exporting application.
@@ -126,4 +140,29 @@ func generateBase64URLID() string {
 // uintPtr returns a pointer to the given uint64 value.
 func uintPtr(v uint64) *uint64 {
 	return &v
+}
+
+// CheckPCICompliance scans credentials for PCI-DSS violations.
+// PCI-DSS 4.0.1 Section 3.3.1 prohibits storing CVV and PIN.
+func CheckPCICompliance(creds []model.Credential) []PCIWarning {
+	var warnings []PCIWarning
+
+	for _, cred := range creds {
+		if cred.Type != model.TypeCreditCard || cred.CreditCard == nil {
+			continue
+		}
+
+		hasCVV := cred.CreditCard.CVV != ""
+		hasPIN := cred.CreditCard.PIN != ""
+
+		if hasCVV || hasPIN {
+			warnings = append(warnings, PCIWarning{
+				CredentialTitle: cred.Title,
+				HasCVV:          hasCVV,
+				HasPIN:          hasPIN,
+			})
+		}
+	}
+
+	return warnings
 }

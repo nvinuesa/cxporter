@@ -19,6 +19,11 @@ import (
 var kdbxSignature = []byte{0x03, 0xd9, 0xa2, 0x9a}
 
 // KeePassSource implements the Source interface for KeePass .kdbx files.
+//
+// Security Note: This implementation uses gokeepasslib which relies on
+// Go's standard library encoding/xml for XML parsing. Go's XML parser is safe from
+// XML External Entity (XXE) attacks by design - it does not resolve external entities
+// or support DTD processing. See: https://github.com/golang/go/issues/14107
 type KeePassSource struct {
 	filePath    string
 	opts        OpenOptions

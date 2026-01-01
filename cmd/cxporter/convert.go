@@ -20,7 +20,6 @@ import (
 var convertFlags struct {
 	source       string
 	output       string
-	password     string
 	keyFile      string
 	encrypt      bool
 	recipientKey string
@@ -60,7 +59,6 @@ Examples:
 func init() {
 	convertCmd.Flags().StringVarP(&convertFlags.source, "source", "s", "", "source type (keepass|chrome|firefox|bitwarden|ssh)")
 	convertCmd.Flags().StringVarP(&convertFlags.output, "output", "o", "", "output file path (default: stdout)")
-	convertCmd.Flags().StringVarP(&convertFlags.password, "password", "p", "", "password for encrypted sources")
 	convertCmd.Flags().StringVarP(&convertFlags.keyFile, "key-file", "k", "", "key file path (for KeePass)")
 	convertCmd.Flags().BoolVarP(&convertFlags.encrypt, "encrypt", "e", false, "generate HPKE-encrypted CXP output")
 	convertCmd.Flags().StringVar(&convertFlags.recipientKey, "recipient-key", "", "recipient public key (base64 or @filepath)")
@@ -152,18 +150,15 @@ func getSourceAdapter(sourceName, inputPath string) (sources.Source, error) {
 }
 
 // openSourceWithAuth opens the source adapter with authentication if needed.
+// Passwords are only accepted via interactive prompt for security.
 func openSourceWithAuth(source sources.Source, inputPath string) error {
 	opts := sources.OpenOptions{}
 
 	// Check if source needs password
 	if needsPassword(source.Name()) {
-		password := convertFlags.password
-		if password == "" {
-			var err error
-			password, err = promptPassword(fmt.Sprintf("Enter password for %s: ", inputPath))
-			if err != nil {
-				return fmt.Errorf("failed to read password: %w", err)
-			}
+		password, err := promptPassword(fmt.Sprintf("Enter password for %s: ", inputPath))
+		if err != nil {
+			return fmt.Errorf("failed to read password: %w", err)
 		}
 		opts.Password = password
 		opts.KeyFilePath = convertFlags.keyFile
@@ -196,6 +191,26 @@ func readAndFilterCredentials(source sources.Source) ([]model.Credential, error)
 
 // generateCXF generates CXF format from credentials.
 func generateCXF(creds []model.Credential) (*gocxf.Header, error) {
+	// Check for PCI-DSS compliance issues
+	pciWarnings := cxf.CheckPCICompliance(creds)
+	if len(pciWarnings) > 0 {
+		fmt.Fprintln(os.Stderr, "\n[WARNING] PCI-DSS Compliance Issue Detected:")
+		fmt.Fprintln(os.Stderr, "PCI-DSS 4.0.1 Section 3.3.1 prohibits storing CVV and PIN values.")
+		fmt.Fprintln(os.Stderr, "The following credentials contain sensitive payment card data:")
+		for _, w := range pciWarnings {
+			fields := []string{}
+			if w.HasCVV {
+				fields = append(fields, "CVV")
+			}
+			if w.HasPIN {
+				fields = append(fields, "PIN")
+			}
+			fmt.Fprintf(os.Stderr, "  - %s: contains %s\n", w.CredentialTitle, strings.Join(fields, ", "))
+		}
+		fmt.Fprintln(os.Stderr, "Consider removing these values before exporting.")
+		fmt.Fprintln(os.Stderr, "")
+	}
+
 	opts := cxf.DefaultOptions()
 	opts.PreserveHierarchy = true
 
@@ -229,6 +244,13 @@ func writeOutput(header *gocxf.Header) error {
 
 	// Write to stdout or file
 	if convertFlags.output == "" {
+		// Warn about unencrypted output to stdout
+		if !convertFlags.encrypt {
+			fmt.Fprintln(os.Stderr, "[WARNING] Writing unencrypted credentials to stdout.")
+			fmt.Fprintln(os.Stderr, "This data may be visible in terminal scrollback, logs, or piped to insecure destinations.")
+			fmt.Fprintln(os.Stderr, "Consider using --encrypt for sensitive data or --output to write to a file.")
+			fmt.Fprintln(os.Stderr, "")
+		}
 		// Write to stdout
 		if _, err := os.Stdout.Write(data); err != nil {
 			return fmt.Errorf("failed to write to stdout: %w", err)

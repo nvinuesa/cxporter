@@ -274,10 +274,16 @@ func (h *HPKEContext) Encrypt(plaintext []byte, aad []byte) ([]byte, error) {
 }
 
 // EncryptToJWE encrypts and wraps in JWE Compact Serialization format.
+// CXP-DEV-002: Uses standard JOSE HPKE algorithm identifier per draft-ietf-jose-hpke-encrypt.
 func (h *HPKEContext) EncryptToJWE(plaintext []byte) ([]byte, error) {
-	// JWE header for HPKE
+	// JWE header for HPKE per draft-ietf-jose-hpke-encrypt
+	// Format: HPKE-[mode]-[kem]-[kdf]-[aead]
+	// - mode: Base (0x00)
+	// - kem: X25519 (0x0020)
+	// - kdf: HKDF-SHA256 (0x0001)
+	// - aead: AES-256-GCM (0x0002)
 	header := map[string]interface{}{
-		"alg": "HPKE-Base-X25519-SHA256-A256GCM",
+		"alg": "HPKE-Base-X25519-SHA256-AES256GCM",
 		"enc": "A256GCM",
 		"epk": map[string]string{
 			"kty": "OKP",

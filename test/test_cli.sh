@@ -403,14 +403,201 @@ test_cli_concurrent_conversions() {
     pass
 }
 
+# Generate a random X25519 public key for testing encryption
+generate_test_pubkey() {
+    openssl rand -base64 32
+}
+
+test_cli_encrypt_produces_cxp_response() {
+    print_test "CLI encrypt produces CXP ExportResponse JSON"
+
+    local input="${TESTDATA}/chrome/passwords.csv"
+    local output
+    output=$(temp_file "cli-encrypt-response")
+    local pubkey
+    pubkey=$(generate_test_pubkey)
+
+    if [[ ! -f "${input}" ]]; then
+        skip "Test file not found: ${input}"
+        return
+    fi
+
+    # Generate encrypted output
+    run_cxporter convert -s chrome "${input}" --encrypt --recipient-key "${pubkey}" -o "${output}" 2>/dev/null || return 1
+
+    # Verify output is valid JSON (not raw binary)
+    assert_valid_json "${output}" || return 1
+
+    pass
+}
+
+test_cli_encrypt_has_version_field() {
+    print_test "CLI encrypt output has version field"
+
+    local input="${TESTDATA}/chrome/passwords.csv"
+    local output
+    output=$(temp_file "cli-encrypt-version")
+    local pubkey
+    pubkey=$(generate_test_pubkey)
+
+    if [[ ! -f "${input}" ]]; then
+        skip "Test file not found: ${input}"
+        return
+    fi
+
+    run_cxporter convert -s chrome "${input}" --encrypt --recipient-key "${pubkey}" -o "${output}" 2>/dev/null || return 1
+
+    assert_json_has_key "${output}" ".version" || return 1
+
+    pass
+}
+
+test_cli_encrypt_has_hpke_field() {
+    print_test "CLI encrypt output has hpke field with sub-fields"
+
+    local input="${TESTDATA}/chrome/passwords.csv"
+    local output
+    output=$(temp_file "cli-encrypt-hpke")
+    local pubkey
+    pubkey=$(generate_test_pubkey)
+
+    if [[ ! -f "${input}" ]]; then
+        skip "Test file not found: ${input}"
+        return
+    fi
+
+    run_cxporter convert -s chrome "${input}" --encrypt --recipient-key "${pubkey}" -o "${output}" 2>/dev/null || return 1
+
+    assert_json_has_key "${output}" ".hpke" || return 1
+    assert_json_has_key "${output}" ".hpke.mode" || return 1
+    assert_json_has_key "${output}" ".hpke.kem" || return 1
+    assert_json_has_key "${output}" ".hpke.kdf" || return 1
+    assert_json_has_key "${output}" ".hpke.aead" || return 1
+
+    pass
+}
+
+test_cli_encrypt_has_exporter_field() {
+    print_test "CLI encrypt output has exporter field"
+
+    local input="${TESTDATA}/chrome/passwords.csv"
+    local output
+    output=$(temp_file "cli-encrypt-exporter")
+    local pubkey
+    pubkey=$(generate_test_pubkey)
+
+    if [[ ! -f "${input}" ]]; then
+        skip "Test file not found: ${input}"
+        return
+    fi
+
+    run_cxporter convert -s chrome "${input}" --encrypt --recipient-key "${pubkey}" -o "${output}" 2>/dev/null || return 1
+
+    assert_json_has_key "${output}" ".exporter" || return 1
+
+    local exporter
+    exporter=$(get_json_value "${output}" ".exporter")
+    if [[ -z "${exporter}" || "${exporter}" == "null" ]]; then
+        fail "exporter field is empty"
+        return 1
+    fi
+
+    pass
+}
+
+test_cli_encrypt_has_payload_field() {
+    print_test "CLI encrypt output has base64url payload field"
+
+    local input="${TESTDATA}/chrome/passwords.csv"
+    local output
+    output=$(temp_file "cli-encrypt-payload")
+    local pubkey
+    pubkey=$(generate_test_pubkey)
+
+    if [[ ! -f "${input}" ]]; then
+        skip "Test file not found: ${input}"
+        return
+    fi
+
+    run_cxporter convert -s chrome "${input}" --encrypt --recipient-key "${pubkey}" -o "${output}" 2>/dev/null || return 1
+
+    assert_json_has_key "${output}" ".payload" || return 1
+
+    local payload
+    payload=$(get_json_value "${output}" ".payload")
+    if [[ -z "${payload}" || "${payload}" == "null" ]]; then
+        fail "payload field is empty"
+        return 1
+    fi
+
+    # Verify it's base64url encoded (no + or / characters, may have - and _)
+    if [[ "${payload}" =~ [+/] ]]; then
+        fail "payload contains non-base64url characters"
+        return 1
+    fi
+
+    pass
+}
+
+test_cli_encrypt_requires_recipient_key() {
+    print_test "CLI encrypt requires recipient key"
+
+    local input="${TESTDATA}/chrome/passwords.csv"
+    local output
+    output=$(temp_file "cli-encrypt-nokey")
+
+    if [[ ! -f "${input}" ]]; then
+        skip "Test file not found: ${input}"
+        return
+    fi
+
+    # Should fail without recipient key
+    if run_cxporter convert -s chrome "${input}" --encrypt -o "${output}" 2>/dev/null; then
+        fail "Should have failed without recipient key"
+        return 1
+    fi
+
+    pass
+}
+
+test_cli_encrypt_stdout() {
+    print_test "CLI encrypt to stdout produces valid JSON"
+
+    local input="${TESTDATA}/chrome/passwords.csv"
+    local pubkey
+    pubkey=$(generate_test_pubkey)
+
+    if [[ ! -f "${input}" ]]; then
+        skip "Test file not found: ${input}"
+        return
+    fi
+
+    local json_output
+    json_output=$(run_cxporter_stdout convert -s chrome "${input}" --encrypt --recipient-key "${pubkey}")
+
+    # Verify output is valid JSON
+    if ! echo "${json_output}" | jq empty 2>/dev/null; then
+        fail "stdout output is not valid JSON"
+        return 1
+    fi
+
+    # Verify it has required fields
+    if ! echo "${json_output}" | jq -e '.version' >/dev/null 2>&1; then
+        fail "stdout output missing version field"
+        return 1
+    fi
+
+    pass
+}
+
 # Main execution
 main() {
     print_header "General CLI Integration Tests"
-    
+
     check_binary
     check_jq
     setup_test_env
-    
+
     test_cli_version
     test_cli_help
     test_cli_convert_help
@@ -431,7 +618,16 @@ main() {
     test_cli_exit_codes
     test_cli_error_messages_to_stderr
     test_cli_concurrent_conversions
-    
+
+    # CXP encrypted response tests
+    test_cli_encrypt_produces_cxp_response
+    test_cli_encrypt_has_version_field
+    test_cli_encrypt_has_hpke_field
+    test_cli_encrypt_has_exporter_field
+    test_cli_encrypt_has_payload_field
+    test_cli_encrypt_requires_recipient_key
+    test_cli_encrypt_stdout
+
     print_summary
 }
 

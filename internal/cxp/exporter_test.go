@@ -3,6 +3,7 @@ package cxp
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -668,5 +669,128 @@ func TestCreateUnencryptedArchive(t *testing.T) {
 
 	if len(parsed.Accounts[0].Items) != 2 {
 		t.Errorf("Items count = %d, want 2", len(parsed.Accounts[0].Items))
+	}
+}
+
+// TestArchiveDeflateCompression verifies CXP-DEV-001: DEFLATE compression.
+func TestArchiveDeflateCompression(t *testing.T) {
+	_, pubKey, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	header := createTestHeader(3)
+	opts := ExportOptions{
+		Encrypt:         true,
+		RecipientPubKey: pubKey,
+	}
+
+	data, err := ExportToBytes(header, opts)
+	if err != nil {
+		t.Fatalf("ExportToBytes() error = %v", err)
+	}
+
+	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatalf("Failed to open ZIP: %v", err)
+	}
+
+	for _, f := range reader.File {
+		// Directories should use Store method
+		if strings.HasSuffix(f.Name, "/") {
+			if f.Method != zip.Store {
+				t.Errorf("Directory %s uses method %d, want Store (%d)", f.Name, f.Method, zip.Store)
+			}
+			continue
+		}
+
+		// Files should use Deflate method (CXP-DEV-001)
+		if f.Method != zip.Deflate {
+			t.Errorf("File %s uses method %d, want Deflate (%d)", f.Name, f.Method, zip.Deflate)
+		}
+	}
+}
+
+// TestExportResponseWithArchive verifies CXP-DEV-004: archive field.
+func TestExportResponseWithArchive(t *testing.T) {
+	_, pubKey, _ := GenerateKeyPair()
+	header := createTestHeader(1)
+
+	t.Run("Valid full response", func(t *testing.T) {
+		resp, err := ExportResponseWithArchive(header, pubKey)
+		if err != nil {
+			t.Fatalf("ExportResponseWithArchive() error = %v", err)
+		}
+
+		if resp.Version != cxp.VersionV0 {
+			t.Errorf("Version = %v, want %v", resp.Version, cxp.VersionV0)
+		}
+		if resp.Exporter != header.ExporterRpId {
+			t.Errorf("Exporter = %v, want %v", resp.Exporter, header.ExporterRpId)
+		}
+		if resp.Archive != ArchiveAlgorithmDeflate {
+			t.Errorf("Archive = %v, want %v", resp.Archive, ArchiveAlgorithmDeflate)
+		}
+		if resp.Payload == "" {
+			t.Error("Payload should not be empty")
+		}
+	})
+
+	t.Run("Nil header", func(t *testing.T) {
+		_, err := ExportResponseWithArchive(nil, pubKey)
+		if err != ErrNilHeader {
+			t.Errorf("ExportResponseWithArchive(nil) error = %v, want ErrNilHeader", err)
+		}
+	})
+
+	t.Run("Missing public key", func(t *testing.T) {
+		_, err := ExportResponseWithArchive(header, nil)
+		if err != ErrMissingPubKey {
+			t.Errorf("ExportResponseWithArchive() without pubkey error = %v, want ErrMissingPubKey", err)
+		}
+	})
+}
+
+// TestJWEAlgorithmIdentifier verifies CXP-DEV-002: standard algorithm identifier.
+func TestJWEAlgorithmIdentifier(t *testing.T) {
+	_, pubKey, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, err := NewHPKEContext(pubKey, DefaultHPKEParams())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	jwe, err := ctx.EncryptToJWE([]byte("test"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Parse the JWE header
+	parts := strings.Split(string(jwe), ".")
+	if len(parts) != 5 {
+		t.Fatalf("JWE has %d parts, want 5", len(parts))
+	}
+
+	headerBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		t.Fatalf("Failed to decode JWE header: %v", err)
+	}
+
+	var header map[string]interface{}
+	if err := json.Unmarshal(headerBytes, &header); err != nil {
+		t.Fatalf("Failed to parse JWE header: %v", err)
+	}
+
+	// Verify algorithm identifier follows JOSE HPKE draft format
+	expectedAlg := "HPKE-Base-X25519-SHA256-AES256GCM"
+	if header["alg"] != expectedAlg {
+		t.Errorf("alg = %v, want %v", header["alg"], expectedAlg)
+	}
+
+	if header["enc"] != "A256GCM" {
+		t.Errorf("enc = %v, want A256GCM", header["enc"])
 	}
 }

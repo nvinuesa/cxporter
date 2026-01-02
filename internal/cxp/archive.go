@@ -5,25 +5,31 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 
 	"github.com/nvinuesa/go-cxf"
 )
 
-// Archive directory structure.
+// Archive constants per CXP specification.
 const (
-	archiveRootDir     = "CXP-Export/"
-	archiveIndexFile   = "CXP-Export/index.jwe"
-	archiveDocsDir     = "CXP-Export/documents/"
-	archiveDocFileFmt  = "CXP-Export/documents/%s.jwe"
+	// Archive directory structure
+	archiveRootDir    = "CXP-Export/"
+	archiveIndexFile  = "CXP-Export/index.jwe"
+	archiveDocsDir    = "CXP-Export/documents/"
+	archiveDocFileFmt = "CXP-Export/documents/%s.jwe"
+
+	// ArchiveAlgorithmDeflate is the only defined archive algorithm per CXP spec.
+	// "Currently only one option defined: deflate - RFC 1951 DEFLATE compressed data format"
+	ArchiveAlgorithmDeflate = "deflate"
 )
 
 // IndexDocument contains account metadata without secrets.
 type IndexDocument struct {
-	Version             cxf.Version     `json:"version"`
-	ExporterRpId        string          `json:"exporterRpId"`
-	ExporterDisplayName string          `json:"exporterDisplayName"`
-	Timestamp           uint64          `json:"timestamp"`
-	Accounts            []IndexAccount  `json:"accounts"`
+	Version             cxf.Version    `json:"version"`
+	ExporterRpId        string         `json:"exporterRpId"`
+	ExporterDisplayName string         `json:"exporterDisplayName"`
+	Timestamp           uint64         `json:"timestamp"`
+	Accounts            []IndexAccount `json:"accounts"`
 }
 
 // IndexAccount contains account metadata for the index.
@@ -38,28 +44,46 @@ type IndexAccount struct {
 
 // IndexItem contains item metadata without credentials.
 type IndexItem struct {
-	ID         string              `json:"id"`
-	CreationAt *uint64             `json:"creationAt,omitempty"`
-	ModifiedAt *uint64             `json:"modifiedAt,omitempty"`
-	Title      string              `json:"title"`
-	Subtitle   string              `json:"subtitle,omitempty"`
-	Favorite   *bool               `json:"favorite,omitempty"`
+	ID         string               `json:"id"`
+	CreationAt *uint64              `json:"creationAt,omitempty"`
+	ModifiedAt *uint64              `json:"modifiedAt,omitempty"`
+	Title      string               `json:"title"`
+	Subtitle   string               `json:"subtitle,omitempty"`
+	Favorite   *bool                `json:"favorite,omitempty"`
 	Scope      *cxf.CredentialScope `json:"scope,omitempty"`
-	Tags       []string            `json:"tags,omitempty"`
+	Tags       []string             `json:"tags,omitempty"`
 }
 
 // CreateArchive builds the CXP ZIP archive structure.
+// Uses DEFLATE compression (RFC 1951) as required by the spec.
 func CreateArchive(header *cxf.Header, hpke *HPKEContext) ([]byte, error) {
 	buf := new(bytes.Buffer)
 	zipWriter := zip.NewWriter(buf)
 
-	// Create root directory
-	if _, err := zipWriter.Create(archiveRootDir); err != nil {
+	// Helper to create a file with explicit DEFLATE compression per CXP spec
+	createDeflateFile := func(name string) (io.Writer, error) {
+		header := &zip.FileHeader{
+			Name:   name,
+			Method: zip.Deflate, // Explicit DEFLATE per spec
+		}
+		return zipWriter.CreateHeader(header)
+	}
+
+	// Create root directory (directories use Store method)
+	dirHeader := &zip.FileHeader{
+		Name:   archiveRootDir,
+		Method: zip.Store,
+	}
+	if _, err := zipWriter.CreateHeader(dirHeader); err != nil {
 		return nil, fmt.Errorf("failed to create root directory: %w", err)
 	}
 
 	// Create documents directory
-	if _, err := zipWriter.Create(archiveDocsDir); err != nil {
+	docsDirHeader := &zip.FileHeader{
+		Name:   archiveDocsDir,
+		Method: zip.Store,
+	}
+	if _, err := zipWriter.CreateHeader(docsDirHeader); err != nil {
 		return nil, fmt.Errorf("failed to create documents directory: %w", err)
 	}
 
@@ -76,7 +100,7 @@ func CreateArchive(header *cxf.Header, hpke *HPKEContext) ([]byte, error) {
 		return nil, fmt.Errorf("failed to encrypt index: %w", err)
 	}
 
-	indexFile, err := zipWriter.Create(archiveIndexFile)
+	indexFile, err := createDeflateFile(archiveIndexFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create index file: %w", err)
 	}
@@ -98,7 +122,7 @@ func CreateArchive(header *cxf.Header, hpke *HPKEContext) ([]byte, error) {
 			}
 
 			itemPath := fmt.Sprintf(archiveDocFileFmt, item.ID)
-			itemFile, err := zipWriter.Create(itemPath)
+			itemFile, err := createDeflateFile(itemPath)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create item file %s: %w", item.ID, err)
 			}

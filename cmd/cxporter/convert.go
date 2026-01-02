@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -223,23 +224,38 @@ func generateCXF(creds []model.Credential) (*gocxf.Header, error) {
 }
 
 // writeOutput writes the CXF header to stdout or a file.
+// For encrypted output, returns a proper CXP ExportResponse JSON object.
+// For unencrypted output, returns raw CXF JSON.
 func writeOutput(header *gocxf.Header) error {
-	exportOpts := cxp.ExportOptions{
-		Encrypt: convertFlags.encrypt,
-	}
+	var data []byte
+	var err error
 
 	if convertFlags.encrypt {
+		// Encrypted: generate proper CXP ExportResponse object
 		pubKey, err := loadRecipientKey(convertFlags.recipientKey)
 		if err != nil {
 			return fmt.Errorf("failed to load recipient key: %w", err)
 		}
-		exportOpts.RecipientPubKey = pubKey
-	}
 
-	// Generate bytes (encrypted or unencrypted)
-	data, err := cxp.ExportToBytes(header, exportOpts)
-	if err != nil {
-		return fmt.Errorf("failed to generate output: %w", err)
+		response, err := cxp.ExportResponse(header, pubKey)
+		if err != nil {
+			return fmt.Errorf("failed to generate CXP response: %w", err)
+		}
+
+		// Serialize to JSON
+		data, err = json.MarshalIndent(response, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to serialize CXP response: %w", err)
+		}
+	} else {
+		// Unencrypted: raw CXF JSON
+		exportOpts := cxp.ExportOptions{
+			Encrypt: false,
+		}
+		data, err = cxp.ExportToBytes(header, exportOpts)
+		if err != nil {
+			return fmt.Errorf("failed to generate output: %w", err)
+		}
 	}
 
 	// Write to stdout or file

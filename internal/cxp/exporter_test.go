@@ -711,46 +711,6 @@ func TestArchiveDeflateCompression(t *testing.T) {
 	}
 }
 
-// TestExportResponseWithArchive verifies CXP-DEV-004: archive field.
-func TestExportResponseWithArchive(t *testing.T) {
-	_, pubKey, _ := GenerateKeyPair()
-	header := createTestHeader(1)
-
-	t.Run("Valid full response", func(t *testing.T) {
-		resp, err := ExportResponseWithArchive(header, pubKey)
-		if err != nil {
-			t.Fatalf("ExportResponseWithArchive() error = %v", err)
-		}
-
-		if resp.Version != cxp.VersionV0 {
-			t.Errorf("Version = %v, want %v", resp.Version, cxp.VersionV0)
-		}
-		if resp.Exporter != header.ExporterRpId {
-			t.Errorf("Exporter = %v, want %v", resp.Exporter, header.ExporterRpId)
-		}
-		if resp.Archive != ArchiveAlgorithmDeflate {
-			t.Errorf("Archive = %v, want %v", resp.Archive, ArchiveAlgorithmDeflate)
-		}
-		if resp.Payload == "" {
-			t.Error("Payload should not be empty")
-		}
-	})
-
-	t.Run("Nil header", func(t *testing.T) {
-		_, err := ExportResponseWithArchive(nil, pubKey)
-		if err != ErrNilHeader {
-			t.Errorf("ExportResponseWithArchive(nil) error = %v, want ErrNilHeader", err)
-		}
-	})
-
-	t.Run("Missing public key", func(t *testing.T) {
-		_, err := ExportResponseWithArchive(header, nil)
-		if err != ErrMissingPubKey {
-			t.Errorf("ExportResponseWithArchive() without pubkey error = %v, want ErrMissingPubKey", err)
-		}
-	})
-}
-
 // TestJWEAlgorithmIdentifier verifies CXP-DEV-002: standard algorithm identifier.
 func TestJWEAlgorithmIdentifier(t *testing.T) {
 	_, pubKey, err := GenerateKeyPair()
@@ -793,4 +753,105 @@ func TestJWEAlgorithmIdentifier(t *testing.T) {
 	if header["enc"] != "A256GCM" {
 		t.Errorf("enc = %v, want A256GCM", header["enc"])
 	}
+}
+
+// TestExportResponseJSONSerialization verifies that ExportResponse
+// serializes to proper CXP-compliant JSON with all required fields.
+func TestExportResponseJSONSerialization(t *testing.T) {
+	_, pubKey, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	header := createTestHeader(2)
+
+	resp, err := ExportResponse(header, pubKey)
+	if err != nil {
+		t.Fatalf("ExportResponse() error = %v", err)
+	}
+
+	// Serialize to JSON
+	jsonData, err := json.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+
+	// Parse back to verify structure
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(jsonData, &parsed); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+
+	// Verify all required CXP fields are present
+	t.Run("Has version field", func(t *testing.T) {
+		if _, ok := parsed["version"]; !ok {
+			t.Error("Missing 'version' field")
+		}
+	})
+
+	t.Run("Has hpke field", func(t *testing.T) {
+		hpke, ok := parsed["hpke"].(map[string]interface{})
+		if !ok {
+			t.Fatal("Missing or invalid 'hpke' field")
+		}
+		// Verify HPKE sub-fields
+		if _, ok := hpke["mode"]; !ok {
+			t.Error("Missing 'hpke.mode' field")
+		}
+		if _, ok := hpke["kem"]; !ok {
+			t.Error("Missing 'hpke.kem' field")
+		}
+		if _, ok := hpke["kdf"]; !ok {
+			t.Error("Missing 'hpke.kdf' field")
+		}
+		if _, ok := hpke["aead"]; !ok {
+			t.Error("Missing 'hpke.aead' field")
+		}
+	})
+
+	t.Run("Has exporter field", func(t *testing.T) {
+		exporter, ok := parsed["exporter"].(string)
+		if !ok || exporter == "" {
+			t.Error("Missing or empty 'exporter' field")
+		}
+	})
+
+	t.Run("Has payload field", func(t *testing.T) {
+		payload, ok := parsed["payload"].(string)
+		if !ok || payload == "" {
+			t.Error("Missing or empty 'payload' field")
+		}
+		// Verify payload is valid base64url
+		_, err := base64.RawURLEncoding.DecodeString(payload)
+		if err != nil {
+			t.Errorf("payload is not valid base64url: %v", err)
+		}
+	})
+
+	t.Run("Payload decodes to valid ZIP", func(t *testing.T) {
+		payload := parsed["payload"].(string)
+		zipData, _ := base64.RawURLEncoding.DecodeString(payload)
+
+		zipReader, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
+		if err != nil {
+			t.Fatalf("Failed to open ZIP from payload: %v", err)
+		}
+
+		// Should have index.jwe and documents
+		hasIndex := false
+		hasDocuments := false
+		for _, f := range zipReader.File {
+			if f.Name == "CXP-Export/index.jwe" {
+				hasIndex = true
+			}
+			if strings.HasPrefix(f.Name, "CXP-Export/documents/") && strings.HasSuffix(f.Name, ".jwe") {
+				hasDocuments = true
+			}
+		}
+		if !hasIndex {
+			t.Error("ZIP payload missing index.jwe")
+		}
+		if !hasDocuments {
+			t.Error("ZIP payload missing documents/*.jwe files")
+		}
+	})
 }

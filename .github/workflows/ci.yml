@@ -69,13 +69,16 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.26rc1"
 
       - name: Build binary
         run: make build
 
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
       - name: Run integration tests
-        run: go test -v ./test/...
+        run: make test-integration
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

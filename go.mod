@@ -5,7 +5,7 @@ go 1.26rc1
 require (
 	github.com/google/uuid v1.6.0
 	github.com/nvinuesa/go-cxf v0.1.0
-	github.com/nvinuesa/go-cxp v0.1.0
+	github.com/nvinuesa/go-cxp v0.1.1
 	github.com/spf13/cobra v1.10.2
 	github.com/tobischo/gokeepasslib/v3 v3.6.0
 	golang.org/x/crypto v0.46.0

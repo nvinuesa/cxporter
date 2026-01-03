@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime/secret"
 
 	"golang.org/x/crypto/curve25519"
 	"golang.org/x/crypto/hkdf"
@@ -75,32 +76,45 @@ func NewHPKEContext(recipientPubKey []byte, params cxp.HpkeParameters) (*HPKECon
 		return nil, fmt.Errorf("%w: only AES-256-GCM AEAD supported", ErrUnsupportedParams)
 	}
 
-	// Generate ephemeral keypair
 	ephemeralPrivate := make([]byte, x25519KeySize)
 	if _, err := io.ReadFull(rand.Reader, ephemeralPrivate); err != nil {
 		return nil, fmt.Errorf("failed to generate ephemeral key: %w", err)
 	}
+	var (
+		ctx *HPKEContext
+		err error
+	)
 
-	// Compute ephemeral public key
-	ephemeralPublic, err := curve25519.X25519(ephemeralPrivate, curve25519.Basepoint)
+	// Generate ephemeral keypair
+	// Use secret.Do to contain the generated secret
+	secret.Do(func() {
+		// Compute ephemeral public key
+		ephemeralPublic, err := curve25519.X25519(ephemeralPrivate, curve25519.Basepoint)
+		if err != nil {
+			err = fmt.Errorf("failed to compute ephemeral public key: %w", err)
+			return
+		}
+
+		// Compute shared secret via ECDH
+		sharedSecret, err := curve25519.X25519(ephemeralPrivate, recipientPubKey)
+		if err != nil {
+			err = fmt.Errorf("failed to compute shared secret: %w", err)
+			return
+		}
+
+		// Build HPKE context using KeySchedule
+		ctx = &HPKEContext{
+			params:      params,
+			encappedKey: ephemeralPublic,
+		}
+
+		// Key schedule: derive key and nonce from shared secret
+		if err2 := ctx.keySchedule(sharedSecret, ephemeralPublic, recipientPubKey); err2 != nil {
+			err = err2
+		}
+	})
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to compute ephemeral public key: %w", err)
-	}
-
-	// Compute shared secret via ECDH
-	sharedSecret, err := curve25519.X25519(ephemeralPrivate, recipientPubKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute shared secret: %w", err)
-	}
-
-	// Build HPKE context using KeySchedule
-	ctx := &HPKEContext{
-		params:      params,
-		encappedKey: ephemeralPublic,
-	}
-
-	// Key schedule: derive key and nonce from shared secret
-	if err := ctx.keySchedule(sharedSecret, ephemeralPublic, recipientPubKey); err != nil {
 		return nil, err
 	}
 

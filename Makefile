@@ -10,6 +10,7 @@ BUILD_DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS := -ldflags "-X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildDate=$(BUILD_DATE)"
 
 # Go commands
+export GOEXPERIMENT := runtimesecret
 GOCMD := go
 GOBUILD := $(GOCMD) build
 GOTEST := $(GOCMD) test

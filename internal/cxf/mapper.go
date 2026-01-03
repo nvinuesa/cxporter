@@ -393,7 +393,7 @@ func makeEditableField(fieldType, value string) *cxf.EditableField {
 }
 
 // marshalCredential marshals a credential to json.RawMessage.
-func marshalCredential(cred interface{}) (json.RawMessage, error) {
+func marshalCredential(cred any) (json.RawMessage, error) {
 	return json.Marshal(cred)
 }
 

@@ -672,7 +672,7 @@ func TestCreateUnencryptedArchive(t *testing.T) {
 	}
 }
 
-// TestArchiveDeflateCompression verifies CXP-DEV-001: DEFLATE compression.
+// TestArchiveDeflateCompression verifies DEFLATE compression.
 func TestArchiveDeflateCompression(t *testing.T) {
 	_, pubKey, err := GenerateKeyPair()
 	if err != nil {
@@ -704,14 +704,14 @@ func TestArchiveDeflateCompression(t *testing.T) {
 			continue
 		}
 
-		// Files should use Deflate method (CXP-DEV-001)
+		// Files should use Deflate method
 		if f.Method != zip.Deflate {
 			t.Errorf("File %s uses method %d, want Deflate (%d)", f.Name, f.Method, zip.Deflate)
 		}
 	}
 }
 
-// TestJWEAlgorithmIdentifier verifies CXP-DEV-002: standard algorithm identifier.
+// TestJWEAlgorithmIdentifier verifies standard algorithm identifier.
 func TestJWEAlgorithmIdentifier(t *testing.T) {
 	_, pubKey, err := GenerateKeyPair()
 	if err != nil {
@@ -739,7 +739,7 @@ func TestJWEAlgorithmIdentifier(t *testing.T) {
 		t.Fatalf("Failed to decode JWE header: %v", err)
 	}
 
-	var header map[string]interface{}
+	var header map[string]any
 	if err := json.Unmarshal(headerBytes, &header); err != nil {
 		t.Fatalf("Failed to parse JWE header: %v", err)
 	}
@@ -776,7 +776,7 @@ func TestExportResponseJSONSerialization(t *testing.T) {
 	}
 
 	// Parse back to verify structure
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(jsonData, &parsed); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
@@ -789,7 +789,7 @@ func TestExportResponseJSONSerialization(t *testing.T) {
 	})
 
 	t.Run("Has hpke field", func(t *testing.T) {
-		hpke, ok := parsed["hpke"].(map[string]interface{})
+		hpke, ok := parsed["hpke"].(map[string]any)
 		if !ok {
 			t.Fatal("Missing or invalid 'hpke' field")
 		}

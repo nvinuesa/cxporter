@@ -55,7 +55,7 @@ func Export(header *cxf.Header, opts ExportOptions) error {
 	return nil
 }
 
-// ExportToBytes returns the export as bytes (for testing or piping).
+// ExportToBytes returns the export as bytes.
 func ExportToBytes(header *cxf.Header, opts ExportOptions) ([]byte, error) {
 	if header == nil {
 		return nil, ErrNilHeader
@@ -112,7 +112,7 @@ func ExportResponse(header *cxf.Header, recipientPubKey []byte) (*cxp.ExportResp
 	}
 
 	// Build response
-	// CXP-DEV-003: Payload must be base64url encoded per CXP specification
+	// Payload must be base64url encoded per CXP specification
 	response := &cxp.ExportResponse{
 		Version:  cxp.VersionV0,
 		Hpke:     params,

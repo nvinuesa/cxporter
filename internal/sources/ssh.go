@@ -258,7 +258,7 @@ func (s *SSHSource) parseKeyFile(path string) (*model.Credential, error) {
 }
 
 // parsePrivateKey attempts to parse a private key, handling encryption.
-func parsePrivateKey(data []byte, password string, promptFunc func(string) (string, error)) (interface{}, string, bool, error) {
+func parsePrivateKey(data []byte, password string, promptFunc func(string) (string, error)) (any, string, bool, error) {
 	// Check if the key is encrypted
 	block, _ := pem.Decode(data)
 	if block == nil {
@@ -332,7 +332,7 @@ func parsePrivateKey(data []byte, password string, promptFunc func(string) (stri
 }
 
 // derivePublicKeyInfo extracts the public key and fingerprint from a signer.
-func derivePublicKeyInfo(key interface{}) (string, string, error) {
+func derivePublicKeyInfo(key any) (string, string, error) {
 	var sshPubKey ssh.PublicKey
 	var err error
 

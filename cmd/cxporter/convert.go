@@ -33,7 +33,7 @@ var convertCmd = &cobra.Command{
 	Long: `Convert credentials from a source format to CXF.
 
 The convert command reads credentials from a source (KeePass, Chrome, Firefox,
-SSH keys, etc.) and outputs them in the FIDO Alliance Credential Exchange
+SSH key, etc.) and outputs them in the FIDO Alliance Credential Exchange
 Format (CXF).
 
 By default, output is written to stdout. Use --output to write to a file.
@@ -51,8 +51,8 @@ Examples:
   # Generate encrypted CXP archive (stdout)
   cxporter convert --source chrome passwords.csv --encrypt --recipient-key @pubkey.pem > out.cxp
 
-  # Pipe to another tool
-  cxporter convert --source ssh ~/.ssh | jq .accounts[0]`,
+  # Convert a single SSH key
+  cxporter convert --source ssh ~/.ssh/id_ed25519 --output ssh-key.cxf`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runConvert,
 }

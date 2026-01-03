@@ -17,9 +17,9 @@ import (
 	"github.com/nvinuesa/cxporter/internal/model"
 )
 
-// SSHSource implements the Source interface for SSH private keys.
+// SSHSource implements the Source interface for a single SSH private key file.
 type SSHSource struct {
-	dirPath     string
+	filePath    string
 	opts        OpenOptions
 	isOpen      bool
 	credentials []model.Credential
@@ -37,16 +37,16 @@ func (s *SSHSource) Name() string {
 
 // Description returns a human-readable description.
 func (s *SSHSource) Description() string {
-	return "SSH private keys from filesystem"
+	return "Single SSH private key file"
 }
 
-// SupportedExtensions returns empty as SSH source works with directories.
+// SupportedExtensions returns common SSH private key file extensions.
 func (s *SSHSource) SupportedExtensions() []string {
-	return []string{} // Directory-based, not file extension based
+	return []string{".pem"} // PEM files; most SSH keys don't have extensions
 }
 
-// Detect checks if the given path contains SSH keys.
-// Returns confidence 0-100 based on whether SSH keys are found.
+// Detect checks if the given path is a valid SSH private key file.
+// Returns confidence 0-100 based on whether it looks like an SSH private key.
 func (s *SSHSource) Detect(path string) (int, error) {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -56,44 +56,40 @@ func (s *SSHSource) Detect(path string) (int, error) {
 		return 0, err
 	}
 
-	// Must be a directory
-	if !info.IsDir() {
+	// Must be a file, not a directory
+	if info.IsDir() {
 		return 0, nil
 	}
 
-	// Check for SSH key files
-	entries, err := os.ReadDir(path)
+	// Check filename patterns (gives initial confidence)
+	name := filepath.Base(path)
+	if !isSSHPrivateKeyFilename(name) {
+		// Not a typical SSH key filename, but we should still check contents
+		// in case it's a key with an unusual name
+	}
+
+	// Read file content to check for PEM format
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return 0, err
 	}
 
-	keyCount := 0
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if isSSHPrivateKeyFilename(name) {
-			keyCount++
-		}
-	}
-
-	if keyCount == 0 {
+	// Check if it looks like a PEM-encoded private key
+	content := string(data)
+	if !strings.Contains(content, "-----BEGIN") {
 		return 0, nil
 	}
 
-	// Higher confidence if it looks like ~/.ssh
-	baseName := filepath.Base(path)
-	if baseName == ".ssh" {
+	// Check for private key indicators
+	if strings.Contains(content, "PRIVATE KEY-----") {
+		// Definitely an SSH private key
 		return 100, nil
 	}
 
-	// Some confidence based on number of keys found
-	confidence := 50 + min(keyCount*10, 40)
-	return confidence, nil
+	return 0, nil
 }
 
-// Open initializes the source with the given directory path.
+// Open initializes the source with the given file path.
 func (s *SSHSource) Open(path string, opts OpenOptions) error {
 	if s.isOpen {
 		return ErrAlreadyOpen
@@ -107,15 +103,15 @@ func (s *SSHSource) Open(path string, opts OpenOptions) error {
 		return &ErrPermissionDenied{Path: path, Op: "stat", Err: err}
 	}
 
-	if !info.IsDir() {
+	if info.IsDir() {
 		return &ErrInvalidFormat{
 			Source:  s.Name(),
 			Path:    path,
-			Details: "path must be a directory",
+			Details: "path must be a file, not a directory",
 		}
 	}
 
-	s.dirPath = path
+	s.filePath = path
 	s.opts = opts
 	s.isOpen = true
 	s.credentials = nil
@@ -123,7 +119,7 @@ func (s *SSHSource) Open(path string, opts OpenOptions) error {
 	return nil
 }
 
-// Read discovers and parses all SSH keys in the directory.
+// Read parses the SSH private key file.
 func (s *SSHSource) Read() ([]model.Credential, error) {
 	if !s.isOpen {
 		return nil, ErrNotOpen
@@ -134,67 +130,20 @@ func (s *SSHSource) Read() ([]model.Credential, error) {
 		return s.credentials, nil
 	}
 
-	var credentials []model.Credential
-	partialErr := &ErrPartialRead{
-		Source: s.Name(),
-	}
-
-	// Walk directory
-	walkFn := func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil // Skip files we can't access
-		}
-
-		// Skip directories in non-recursive mode
-		if d.IsDir() {
-			if path != s.dirPath && !s.opts.Recursive {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		// Skip non-key files
-		name := d.Name()
-		if !isSSHPrivateKeyFilename(name) {
-			return nil
-		}
-
-		// Skip hidden files unless explicitly included
-		if strings.HasPrefix(name, ".") && !s.opts.IncludeHidden {
-			return nil
-		}
-
-		partialErr.TotalItems++
-
-		// Try to read and parse the key
-		cred, err := s.parseKeyFile(path)
-		if err != nil {
-			partialErr.AddFailure(fmt.Sprintf("%s: %v", filepath.Base(path), err), err)
-			return nil
-		}
-
-		credentials = append(credentials, *cred)
-		partialErr.ReadItems++
-		return nil
-	}
-
-	if err := filepath.WalkDir(s.dirPath, walkFn); err != nil {
+	// Parse the single key file
+	cred, err := s.parseKeyFile(s.filePath)
+	if err != nil {
 		return nil, err
 	}
 
-	s.credentials = credentials
-
-	if partialErr.HasFailures() {
-		return credentials, partialErr
-	}
-
-	return credentials, nil
+	s.credentials = []model.Credential{*cred}
+	return s.credentials, nil
 }
 
 // Close releases resources.
 func (s *SSHSource) Close() error {
 	s.isOpen = false
-	s.dirPath = ""
+	s.filePath = ""
 	s.credentials = nil
 	return nil
 }
@@ -470,14 +419,6 @@ func generateKeyID(fingerprint string) string {
 // init registers the SSH source with the default registry.
 func init() {
 	RegisterDefault(NewSSHSource())
-}
-
-// Helper for go 1.21+
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // Ensure SSHSource implements Source interface

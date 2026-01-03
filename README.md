@@ -48,10 +48,10 @@ cxporter convert -s keepass -i vault.kdbx -o vault.cxf
 cxporter convert -s chrome -i passwords.csv -o chrome.cxf
 ```
 
-### Convert SSH Keys
+### Convert SSH Key
 
 ```bash
-cxporter convert -s ssh -i ~/.ssh -o ssh-keys.cxf
+cxporter convert -s ssh -i ~/.ssh/id_ed25519 -o ssh-key.cxf
 ```
 
 ### Preview Before Converting
@@ -68,13 +68,13 @@ cxporter convert -s keepass -i vault.kdbx -o vault.cxp --encrypt --recipient-key
 
 ## Supported Sources
 
-| Source    | Format    | Credential Types                          |
-|-----------|-----------|-------------------------------------------|
-| KeePass   | .kdbx     | passwords, TOTP, notes, attachments       |
-| Chrome    | CSV       | passwords                                 |
-| Firefox   | CSV       | passwords                                 |
-| Bitwarden | JSON      | passwords, TOTP, notes, cards, identities |
-| SSH       | directory | SSH keys                                  |
+| Source    | Format     | Credential Types                          |
+|-----------|------------|-------------------------------------------|
+| KeePass   | .kdbx      | passwords, TOTP, notes, attachments       |
+| Chrome    | CSV        | passwords                                 |
+| Firefox   | CSV        | passwords                                 |
+| Bitwarden | JSON       | passwords, TOTP, notes, cards, identities |
+| SSH       | key file   | SSH key (single file)                     |
 
 ## Requirements
 

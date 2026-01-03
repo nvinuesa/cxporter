@@ -539,8 +539,301 @@ func saveTestDB(t *testing.T, db *gokeepasslib.Database) string {
 	return path
 }
 
-func init() {
-	// Create testdata/keepass directory
-	keepassDir := filepath.Join(getTestdataPath(), "keepass")
-	_ = os.MkdirAll(keepassDir, 0755)
+// Tests using testdata files
+
+func TestKeePassSource_Testdata_Basic(t *testing.T) {
+	dbPath := filepath.Join(getTestdataPath(), "keepass", "basic.kdbx")
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		t.Skip("testdata/keepass/basic.kdbx not found")
+	}
+
+	s := NewKeePassSource()
+
+	// Test detection
+	confidence, err := s.Detect(dbPath)
+	if err != nil {
+		t.Fatalf("Detect() error = %v", err)
+	}
+	if confidence != 100 {
+		t.Errorf("Detect() = %d, want 100", confidence)
+	}
+
+	// Test opening
+	err = s.Open(dbPath, OpenOptions{Password: testKeePassPassword})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer s.Close()
+
+	// Test reading
+	creds, err := s.Read()
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+
+	// basic.kdbx should have at least 3 entries: GitHub, Gmail, AWS Console
+	// (may include a default "Sample Entry" from gokeepasslib)
+	if len(creds) < 3 {
+		t.Errorf("Read() returned %d credentials, want at least 3", len(creds))
+	}
+
+	// Verify our entries have expected data
+	titles := make(map[string]bool)
+	for _, cred := range creds {
+		titles[cred.Title] = true
+		// Skip checking Sample Entry (default from library)
+		if cred.Title == "Sample Entry" {
+			continue
+		}
+		if cred.Type != model.TypeBasicAuth {
+			t.Errorf("Credential %q type = %v, want basic-auth", cred.Title, cred.Type)
+		}
+		if cred.Username == "" {
+			t.Errorf("Credential %q should have username", cred.Title)
+		}
+		if cred.Password == "" {
+			t.Errorf("Credential %q should have password", cred.Title)
+		}
+	}
+
+	expectedTitles := []string{"GitHub", "Gmail", "AWS Console"}
+	for _, title := range expectedTitles {
+		if !titles[title] {
+			t.Errorf("Missing expected entry: %s", title)
+		}
+	}
+}
+
+func TestKeePassSource_Testdata_TOTP(t *testing.T) {
+	dbPath := filepath.Join(getTestdataPath(), "keepass", "totp.kdbx")
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		t.Skip("testdata/keepass/totp.kdbx not found")
+	}
+
+	s := NewKeePassSource()
+	err := s.Open(dbPath, OpenOptions{Password: testKeePassPassword})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer s.Close()
+
+	creds, err := s.Read()
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+
+	// totp.kdbx should have at least 4 entries with TOTP data
+	// (may include a default "Sample Entry" from gokeepasslib)
+	if len(creds) < 4 {
+		t.Errorf("Read() returned %d credentials, want at least 4", len(creds))
+	}
+
+	// Count TOTP entries
+	totpCount := 0
+	for _, cred := range creds {
+		if cred.Type == model.TypeTOTP {
+			totpCount++
+			if cred.TOTP == nil {
+				t.Errorf("Credential %q has TypeTOTP but nil TOTP data", cred.Title)
+				continue
+			}
+			if cred.TOTP.Secret == "" {
+				t.Errorf("Credential %q TOTP secret is empty", cred.Title)
+			}
+		}
+	}
+
+	if totpCount < 4 {
+		t.Errorf("Found %d TOTP credentials, want at least 4", totpCount)
+	}
+
+	// Test specific TOTP configuration
+	for _, cred := range creds {
+		if cred.Title == "Steam Guard" && cred.TOTP != nil {
+			if cred.TOTP.Digits != 8 {
+				t.Errorf("Steam Guard TOTP digits = %d, want 8", cred.TOTP.Digits)
+			}
+			if cred.TOTP.Period != 60 {
+				t.Errorf("Steam Guard TOTP period = %d, want 60", cred.TOTP.Period)
+			}
+		}
+		if cred.Title == "Dropbox 2FA" && cred.TOTP != nil {
+			if cred.TOTP.Algorithm != model.TOTPAlgorithmSHA256 {
+				t.Errorf("Dropbox 2FA TOTP algorithm = %v, want SHA256", cred.TOTP.Algorithm)
+			}
+		}
+	}
+}
+
+func TestKeePassSource_Testdata_NestedGroups(t *testing.T) {
+	dbPath := filepath.Join(getTestdataPath(), "keepass", "nested_groups.kdbx")
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		t.Skip("testdata/keepass/nested_groups.kdbx not found")
+	}
+
+	s := NewKeePassSource()
+	err := s.Open(dbPath, OpenOptions{Password: testKeePassPassword})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer s.Close()
+
+	creds, err := s.Read()
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+
+	// nested_groups.kdbx should have at least 6 entries in various groups
+	// (may include a default "Sample Entry" from gokeepasslib)
+	if len(creds) < 6 {
+		t.Errorf("Read() returned %d credentials, want at least 6", len(creds))
+	}
+
+	// Check folder paths
+	folderPaths := make(map[string]bool)
+	for _, cred := range creds {
+		folderPaths[cred.FolderPath] = true
+	}
+
+	expectedPaths := []string{
+		"Root",
+		"Root/Work",
+		"Root/Work/Servers",
+		"Root/Work/Servers/Databases",
+		"Root/Personal",
+	}
+
+	for _, path := range expectedPaths {
+		if !folderPaths[path] {
+			t.Errorf("Missing expected folder path: %s", path)
+		}
+	}
+
+	// Find specific entry in deep nesting
+	var dbEntry *model.Credential
+	for i := range creds {
+		if creds[i].Title == "PostgreSQL Production" {
+			dbEntry = &creds[i]
+			break
+		}
+	}
+
+	if dbEntry == nil {
+		t.Fatal("Should have found PostgreSQL Production entry")
+	}
+	if dbEntry.FolderPath != "Root/Work/Servers/Databases" {
+		t.Errorf("PostgreSQL Production folder = %q, want Root/Work/Servers/Databases", dbEntry.FolderPath)
+	}
+}
+
+func TestKeePassSource_Testdata_Complete(t *testing.T) {
+	dbPath := filepath.Join(getTestdataPath(), "keepass", "complete.kdbx")
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		t.Skip("testdata/keepass/complete.kdbx not found")
+	}
+
+	s := NewKeePassSource()
+	err := s.Open(dbPath, OpenOptions{Password: testKeePassPassword})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer s.Close()
+
+	creds, err := s.Read()
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+
+	// complete.kdbx should have at least 5 entries
+	// (may include a default "Sample Entry" from gokeepasslib)
+	if len(creds) < 5 {
+		t.Errorf("Read() returned %d credentials, want at least 5", len(creds))
+	}
+
+	// Find entry with custom fields
+	var serverEntry *model.Credential
+	for i := range creds {
+		if creds[i].Title == "Server with Custom Fields" {
+			serverEntry = &creds[i]
+			break
+		}
+	}
+
+	if serverEntry == nil {
+		t.Fatal("Should have found 'Server with Custom Fields' entry")
+	}
+
+	// Check custom fields
+	if serverEntry.CustomFields == nil {
+		t.Fatal("Custom fields should not be nil")
+	}
+	if serverEntry.CustomFields["API Key"] != "sk-abc123def456" {
+		t.Errorf("API Key = %q, want sk-abc123def456", serverEntry.CustomFields["API Key"])
+	}
+	if serverEntry.CustomFields["Environment"] != "production" {
+		t.Errorf("Environment = %q, want production", serverEntry.CustomFields["Environment"])
+	}
+
+	// Check tags
+	if len(serverEntry.Tags) == 0 {
+		t.Error("Server entry should have tags")
+	}
+
+	// Find entry with TOTP and custom fields
+	var fullEntry *model.Credential
+	for i := range creds {
+		if creds[i].Title == "Full Featured Entry" {
+			fullEntry = &creds[i]
+			break
+		}
+	}
+
+	if fullEntry == nil {
+		t.Fatal("Should have found 'Full Featured Entry' entry")
+	}
+	if fullEntry.Type != model.TypeTOTP {
+		t.Errorf("Full Featured Entry type = %v, want TypeTOTP", fullEntry.Type)
+	}
+	if fullEntry.TOTP == nil {
+		t.Fatal("Full Featured Entry should have TOTP data")
+	}
+	if fullEntry.CustomFields["Recovery Email"] != "recovery@example.com" {
+		t.Errorf("Recovery Email = %q, want recovery@example.com", fullEntry.CustomFields["Recovery Email"])
+	}
+
+	// Check entry with minimal data
+	var legacyEntry *model.Credential
+	for i := range creds {
+		if creds[i].Title == "Legacy System" {
+			legacyEntry = &creds[i]
+			break
+		}
+	}
+
+	if legacyEntry == nil {
+		t.Fatal("Should have found 'Legacy System' entry")
+	}
+	if legacyEntry.Password != "" {
+		t.Errorf("Legacy System should have no password, got %q", legacyEntry.Password)
+	}
+	if legacyEntry.Username != "legacy_admin" {
+		t.Errorf("Legacy System username = %q, want legacy_admin", legacyEntry.Username)
+	}
+}
+
+func TestKeePassSource_Testdata_WrongPassword(t *testing.T) {
+	dbPath := filepath.Join(getTestdataPath(), "keepass", "basic.kdbx")
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		t.Skip("testdata/keepass/basic.kdbx not found")
+	}
+
+	s := NewKeePassSource()
+	err := s.Open(dbPath, OpenOptions{Password: "wrongpassword"})
+	if err == nil {
+		s.Close()
+		t.Fatal("Open() should fail with wrong password")
+	}
+	if !IsAuthError(err) {
+		t.Errorf("Expected auth error, got %v", err)
+	}
 }

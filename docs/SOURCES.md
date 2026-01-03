@@ -146,16 +146,11 @@ cxporter convert -s bitwarden -i export.json -o bitwarden-creds.cxf
 
 ## SSH Keys
 
-### Directory Structure
-SSH keys are read from a directory (typically `~/.ssh`):
-```
-~/.ssh/
-├── id_ed25519
-├── id_ed25519.pub
-├── id_rsa
-├── id_rsa.pub
-├── config
-└── known_hosts
+### Input Format
+SSH keys are read as individual files (not directories). Provide the path to a single SSH private key file:
+
+```bash
+cxporter convert -s ssh -i ~/.ssh/id_ed25519 -o ssh-key.cxf
 ```
 
 ### Supported Key Types
@@ -166,20 +161,28 @@ SSH keys are read from a directory (typically `~/.ssh`):
 
 ### Supported Features
 - Private key (PEM format)
-- Public key (OpenSSH format)
+- Public key (OpenSSH format, read from corresponding .pub file)
 - Key fingerprint (SHA256)
-- Key comment
-- Encrypted key detection
+- Key comment (extracted from .pub file)
+- Encrypted key support (with password prompt)
 
 ### Usage
 ```bash
-cxporter convert -s ssh -i ~/.ssh -o ssh-keys.cxf
+# Convert a single SSH key
+cxporter convert -s ssh -i ~/.ssh/id_ed25519 -o ssh-key.cxf
+
+# Convert an RSA key
+cxporter convert -s ssh -i ~/.ssh/id_rsa -o rsa-key.cxf
+
+# Convert a PEM key file
+cxporter convert -s ssh -i server.pem -o server-key.cxf
 ```
 
 ### Notes
-- Encrypted private keys are preserved as-is
-- Public keys are included when available
-- Config file is not processed
+- Each invocation converts a single key file
+- Encrypted private keys will prompt for passphrase
+- Public key is automatically read from the corresponding `.pub` file if present
+- To convert multiple keys, run the command multiple times or use a shell loop
 
 ---
 

@@ -135,45 +135,6 @@ test_chrome_old_format() {
     pass
 }
 
-test_chrome_preview() {
-    print_test "Chrome preview command"
-    
-    local input="${TESTDATA}/chrome/passwords.csv"
-    
-    if [[ ! -f "${input}" ]]; then
-        skip "Test file not found: ${input}"
-        return
-    fi
-    
-    local preview_output
-    preview_output=$(run_cxporter_stdout preview -s chrome "${input}")
-    
-    assert_contains "${preview_output}" "Source: chrome" || return 1
-    assert_contains "${preview_output}" "Credentials:" || return 1
-    assert_contains "${preview_output}" "4 total" || return 1
-    
-    pass
-}
-
-test_chrome_preview_auto_detect() {
-    print_test "Chrome preview with auto-detect"
-    
-    local input="${TESTDATA}/chrome/passwords.csv"
-    
-    if [[ ! -f "${input}" ]]; then
-        skip "Test file not found: ${input}"
-        return
-    fi
-    
-    local preview_output
-    preview_output=$(run_cxporter preview "${input}" 2>&1)
-    
-    assert_contains "${preview_output}" "chrome" || return 1
-    assert_contains "${preview_output}" "Credentials:" || return 1
-    
-    pass
-}
-
 test_chrome_invalid_file() {
     print_test "Chrome handles invalid file"
     
@@ -303,8 +264,6 @@ main() {
     test_chrome_auto_detect
     test_chrome_edge_cases
     test_chrome_old_format
-    test_chrome_preview
-    test_chrome_preview_auto_detect
     test_chrome_invalid_file
     test_chrome_nonexistent_file
     test_chrome_credential_fields

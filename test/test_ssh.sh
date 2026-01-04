@@ -181,44 +181,6 @@ test_ssh_encrypted_key() {
     pass
 }
 
-test_ssh_preview() {
-    print_test "SSH preview command"
-    
-    local input="${TESTDATA}/ssh"
-    
-    if [[ ! -d "${input}" ]]; then
-        skip "Test directory not found: ${input}"
-        return
-    fi
-    
-    local preview_output
-    preview_output=$(run_cxporter_stdout preview -s ssh "${input}")
-    
-    assert_contains "${preview_output}" "Source: ssh" || return 1
-    assert_contains "${preview_output}" "Credentials:" || return 1
-    
-    pass
-}
-
-test_ssh_preview_shows_key_types() {
-    print_test "SSH preview shows key types"
-    
-    local input="${TESTDATA}/ssh"
-    
-    if [[ ! -d "${input}" ]]; then
-        skip "Test directory not found: ${input}"
-        return
-    fi
-    
-    local preview_output
-    preview_output=$(run_cxporter_stdout preview -s ssh "${input}")
-    
-    # Should show ssh-key type (lowercase with hyphen)
-    assert_contains "${preview_output}" "ssh-key" || return 1
-    
-    pass
-}
-
 test_ssh_nonexistent_path() {
     print_test "SSH handles nonexistent path"
     
@@ -356,8 +318,6 @@ main() {
     test_ssh_ed25519_key
     test_ssh_ecdsa_key
     test_ssh_encrypted_key
-    test_ssh_preview
-    test_ssh_preview_shows_key_types
     test_ssh_nonexistent_path
     test_ssh_skips_non_key_files
     test_ssh_credential_fields

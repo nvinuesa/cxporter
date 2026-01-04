@@ -76,16 +76,19 @@ cxporter keygen -o keypair.json
 
 ## Encrypting Exports
 
+To enable encryption, provide the recipient's X25519 public key via `--encrypt-key`.
+When this flag is provided, cxporter automatically produces HPKE-encrypted CXP output.
+
 ### Basic Encryption
 
 ```bash
 # With base64-encoded public key
-cxporter convert -s keepass -i vault.kdbx -o vault.cxp \
-    --encrypt --recipient-key "base64-encoded-public-key"
+cxporter convert -s keepass vault.kdbx -o vault.cxp \
+    --encrypt-key "base64-encoded-public-key"
 
-# With key file
-cxporter convert -s keepass -i vault.kdbx -o vault.cxp \
-    --encrypt --recipient-key @public.key
+# With key file (use @ prefix)
+cxporter convert -s keepass vault.kdbx -o vault.cxp \
+    --encrypt-key @public.key
 ```
 
 ### Key File Format
@@ -147,7 +150,7 @@ func main() {
 ### Plaintext Handling
 - CXF JSON files contain plaintext credentials
 - Delete plaintext files after encryption
-- Use `--encrypt` for any transfer over untrusted networks
+- Use `--encrypt-key` for any transfer over untrusted networks
 
 ## Troubleshooting
 

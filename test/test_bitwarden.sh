@@ -95,25 +95,6 @@ test_bitwarden_auto_detect() {
     pass
 }
 
-test_bitwarden_preview() {
-    print_test "Bitwarden preview command"
-    
-    local input="${TESTDATA}/bitwarden/export.json"
-    
-    if [[ ! -f "${input}" ]]; then
-        skip "Test file not found: ${input}"
-        return
-    fi
-    
-    local preview_output
-    preview_output=$(run_cxporter_stdout preview -s bitwarden "${input}")
-    
-    assert_contains "${preview_output}" "Source: bitwarden" || return 1
-    assert_contains "${preview_output}" "Credentials:" || return 1
-    
-    pass
-}
-
 test_bitwarden_folders() {
     print_test "Bitwarden folder hierarchy"
     
@@ -138,78 +119,50 @@ test_bitwarden_folders() {
     pass
 }
 
-test_bitwarden_preview_folders() {
-    print_test "Bitwarden preview shows folders"
-    
-    local input="${TESTDATA}/bitwarden/export.json"
-    
-    if [[ ! -f "${input}" ]]; then
-        skip "Test file not found: ${input}"
-        return
-    fi
-    
-    local preview_output
-    preview_output=$(run_cxporter_stdout preview -s bitwarden "${input}")
-    
-    # Should show Collections section
-    assert_contains "${preview_output}" "Collections:" || return 1
-    
-    pass
-}
-
 test_bitwarden_multiple_types() {
     print_test "Bitwarden handles multiple credential types"
-    
+
     local input="${TESTDATA}/bitwarden/export.json"
     local output
     output=$(temp_file "bitwarden-types")
-    
+
     if [[ ! -f "${input}" ]]; then
         skip "Test file not found: ${input}"
         return
     fi
-    
+
     run_cxporter convert -s bitwarden "${input}" -o "${output}" || return 1
-    
+
     # Bitwarden exports can contain logins, notes, cards, identities
-    # Our test data should have at least logins
-    local preview_output
-    preview_output=$(run_cxporter_stdout preview -s bitwarden "${input}")
-    
-    # Should show credential type breakdown
-    if [[ "${preview_output}" =~ "BasicAuth" ]] || [[ "${preview_output}" =~ "Note" ]] || [[ "${preview_output}" =~ "CreditCard" ]]; then
-        pass
-        return 0
-    fi
-    
-    # If no specific types mentioned, at least verify it converted
+    # Verify it converted successfully
     assert_valid_json "${output}" || return 1
-    
+
+    # Check that items were converted
+    local item_count
+    item_count=$(json_array_length "${output}" ".accounts[0].items")
+    assert_greater_than "${item_count}" "0" "Expected items from Bitwarden export" || return 1
+
     pass
 }
 
 test_bitwarden_totp() {
     print_test "Bitwarden TOTP extraction"
-    
+
     local input="${TESTDATA}/bitwarden/export.json"
     local output
     output=$(temp_file "bitwarden-totp")
-    
+
     if [[ ! -f "${input}" ]]; then
         skip "Test file not found: ${input}"
         return
     fi
-    
+
     run_cxporter convert -s bitwarden "${input}" -o "${output}" || return 1
-    
-    # Check preview for TOTP type
-    local preview_output
-    preview_output=$(run_cxporter_stdout preview -s bitwarden "${input}")
-    
+
     # The export.json has a TOTP field in the GitHub entry
     # It should be extracted as a separate TOTP credential or embedded
     assert_valid_json "${output}" || return 1
-    
+
     pass
 }
 
@@ -357,9 +310,7 @@ main() {
     test_bitwarden_basic_convert
     test_bitwarden_stdout
     test_bitwarden_auto_detect
-    test_bitwarden_preview
     test_bitwarden_folders
-    test_bitwarden_preview_folders
     test_bitwarden_multiple_types
     test_bitwarden_totp
     test_bitwarden_encrypted

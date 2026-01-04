@@ -4,7 +4,9 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/nvinuesa/cxporter)](https://goreportcard.com/report/github.com/nvinuesa/cxporter)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
-Convert credentials from legacy password managers to the FIDO Alliance CXF format.
+Convert credentials from legacy password managers to the FIDO Alliance CXP protocol (CXF format).
+
+🚧 DISCLAIMER: This project is still under development and not ready for production use, furthermore both specs are still in draft stage. Use at your own risk. 🚧
 
 ## Overview
 
@@ -16,7 +18,6 @@ Convert credentials from legacy password managers to the FIDO Alliance CXF forma
 - **CXF output**: Export to the standardized FIDO Alliance CXF format
 - **HPKE encryption**: Optional encryption for secure credential transfers
 - **Metadata preservation**: Maintains timestamps, folders, tags, and custom fields
-- **Preview mode**: Inspect conversions before exporting
 
 ## Installation
 
@@ -36,6 +37,12 @@ make build
 
 ## Usage
 
+### Convert SSH Key
+
+```bash
+cxporter convert -s ssh -i ~/.ssh/id_ed25519 -o ssh-key.cxf
+```
+
 ### Convert KeePass to CXF
 
 ```bash
@@ -48,22 +55,16 @@ cxporter convert -s keepass -i vault.kdbx -o vault.cxf
 cxporter convert -s chrome -i passwords.csv -o chrome.cxf
 ```
 
-### Convert SSH Key
-
-```bash
-cxporter convert -s ssh -i ~/.ssh/id_ed25519 -o ssh-key.cxf
-```
-
-### Preview Before Converting
-
-```bash
-cxporter preview -s keepass -i vault.kdbx
-```
-
 ### Encrypted Export
 
+To enable HPKE encryption, provide an X25519 public key via `--encrypt-key`:
+
 ```bash
-cxporter convert -s keepass -i vault.kdbx -o vault.cxp --encrypt --recipient-key <base64-pubkey>
+# With base64-encoded key
+cxporter convert -s keepass vault.kdbx -o vault.cxp --encrypt-key <base64-pubkey>
+
+# With key file
+cxporter convert -s keepass vault.kdbx -o vault.cxp --encrypt-key @pubkey.key
 ```
 
 ## Supported Sources
@@ -78,7 +79,7 @@ cxporter convert -s keepass -i vault.kdbx -o vault.cxp --encrypt --recipient-key
 
 ## Requirements
 
-- Go 1.23 or later (for building from source)
+- Go 1.26rc1 or later (for building from source)
 
 ## License
 

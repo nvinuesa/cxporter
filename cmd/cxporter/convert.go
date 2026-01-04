@@ -19,12 +19,11 @@ import (
 )
 
 var convertFlags struct {
-	source       string
-	output       string
-	keyFile      string
-	encrypt      bool
-	recipientKey string
-	filter       string
+	source     string
+	output     string
+	keyFile    string
+	encryptKey string
+	filter     string
 }
 
 var convertCmd = &cobra.Command{
@@ -38,6 +37,10 @@ Format (CXF).
 
 By default, output is written to stdout. Use --output to write to a file.
 
+To enable HPKE encryption (CXP format), provide an X25519 public key via
+--encrypt-key. The key can be base64-encoded or loaded from a file using
+the @filepath syntax.
+
 Examples:
   # Convert KeePass database to CXF (stdout)
   cxporter convert --source keepass vault.kdbx > credentials.cxf
@@ -48,8 +51,8 @@ Examples:
   # Auto-detect source type
   cxporter convert passwords.csv --output credentials.cxf
 
-  # Generate encrypted CXP archive (stdout)
-  cxporter convert --source chrome passwords.csv --encrypt --recipient-key @pubkey.pem > out.cxp
+  # Generate encrypted CXP output (provide recipient's public key)
+  cxporter convert --source chrome passwords.csv --encrypt-key @pubkey.pem -o out.cxp
 
   # Convert a single SSH key
   cxporter convert --source ssh ~/.ssh/id_ed25519 --output ssh-key.cxf`,
@@ -61,8 +64,7 @@ func init() {
 	convertCmd.Flags().StringVarP(&convertFlags.source, "source", "s", "", "source type (keepass|chrome|firefox|bitwarden|ssh)")
 	convertCmd.Flags().StringVarP(&convertFlags.output, "output", "o", "", "output file path (default: stdout)")
 	convertCmd.Flags().StringVarP(&convertFlags.keyFile, "key-file", "k", "", "key file path (for KeePass)")
-	convertCmd.Flags().BoolVarP(&convertFlags.encrypt, "encrypt", "e", false, "generate HPKE-encrypted CXP output")
-	convertCmd.Flags().StringVar(&convertFlags.recipientKey, "recipient-key", "", "recipient public key (base64 or @filepath)")
+	convertCmd.Flags().StringVarP(&convertFlags.encryptKey, "encrypt-key", "e", "", "X25519 public key for HPKE encryption (base64 or @filepath)")
 	convertCmd.Flags().StringVarP(&convertFlags.filter, "filter", "f", "", "filter by tag, folder, or title substring")
 }
 
@@ -230,11 +232,13 @@ func writeOutput(header *gocxf.Header) error {
 	var data []byte
 	var err error
 
-	if convertFlags.encrypt {
+	encrypt := convertFlags.encryptKey != ""
+
+	if encrypt {
 		// Encrypted: generate proper CXP ExportResponse object
-		pubKey, err := loadRecipientKey(convertFlags.recipientKey)
+		pubKey, err := loadEncryptKey(convertFlags.encryptKey)
 		if err != nil {
-			return fmt.Errorf("failed to load recipient key: %w", err)
+			return fmt.Errorf("failed to load encryption key: %w", err)
 		}
 
 		response, err := cxp.ExportResponse(header, pubKey)
@@ -261,10 +265,10 @@ func writeOutput(header *gocxf.Header) error {
 	// Write to stdout or file
 	if convertFlags.output == "" {
 		// Warn about unencrypted output to stdout
-		if !convertFlags.encrypt {
+		if !encrypt {
 			fmt.Fprintln(os.Stderr, "[WARNING] Writing unencrypted credentials to stdout.")
 			fmt.Fprintln(os.Stderr, "This data may be visible in terminal scrollback, logs, or piped to insecure destinations.")
-			fmt.Fprintln(os.Stderr, "Consider using --encrypt for sensitive data or --output to write to a file.")
+			fmt.Fprintln(os.Stderr, "Consider using --encrypt-key for sensitive data or --output to write to a file.")
 			fmt.Fprintln(os.Stderr, "")
 		}
 		// Write to stdout
@@ -297,10 +301,10 @@ func promptPassword(prompt string) (string, error) {
 	return string(password), nil
 }
 
-// loadRecipientKey loads a recipient public key from base64 or file.
-func loadRecipientKey(keySpec string) ([]byte, error) {
+// loadEncryptKey loads a public key for encryption from base64 or file.
+func loadEncryptKey(keySpec string) ([]byte, error) {
 	if keySpec == "" {
-		return nil, fmt.Errorf("recipient key is required for encryption (use --recipient-key)")
+		return nil, fmt.Errorf("encryption key is required (use --encrypt-key)")
 	}
 
 	var keyData string

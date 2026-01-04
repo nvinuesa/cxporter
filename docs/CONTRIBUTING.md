@@ -37,8 +37,6 @@ cxporter/
 ├── cmd/cxporter/       # CLI application
 │   ├── main.go         # Entry point
 │   ├── convert.go      # Convert command
-│   ├── preview.go      # Preview command
-│   ├── sources.go      # Sources command
 │   └── version.go      # Version command
 ├── internal/
 │   ├── model/          # Internal credential model

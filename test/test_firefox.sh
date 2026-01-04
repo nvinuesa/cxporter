@@ -95,45 +95,6 @@ test_firefox_auto_detect() {
     pass
 }
 
-test_firefox_preview() {
-    print_test "Firefox preview command"
-    
-    local input="${TESTDATA}/firefox/logins.csv"
-    
-    if [[ ! -f "${input}" ]]; then
-        skip "Test file not found: ${input}"
-        return
-    fi
-    
-    local preview_output
-    preview_output=$(run_cxporter_stdout preview -s firefox "${input}")
-    
-    assert_contains "${preview_output}" "Source: firefox" || return 1
-    assert_contains "${preview_output}" "Credentials:" || return 1
-    assert_contains "${preview_output}" "3 total" || return 1
-    
-    pass
-}
-
-test_firefox_preview_auto_detect() {
-    print_test "Firefox preview with auto-detect"
-    
-    local input="${TESTDATA}/firefox/logins.csv"
-    
-    if [[ ! -f "${input}" ]]; then
-        skip "Test file not found: ${input}"
-        return
-    fi
-    
-    local preview_output
-    preview_output=$(run_cxporter preview "${input}" 2>&1)
-    
-    assert_contains "${preview_output}" "firefox" || return 1
-    assert_contains "${preview_output}" "Credentials:" || return 1
-    
-    pass
-}
-
 test_firefox_invalid_file() {
     print_test "Firefox handles invalid file"
     
@@ -290,8 +251,6 @@ main() {
     test_firefox_basic_convert
     test_firefox_stdout
     test_firefox_auto_detect
-    test_firefox_preview
-    test_firefox_preview_auto_detect
     test_firefox_invalid_file
     test_firefox_nonexistent_file
     test_firefox_credential_fields

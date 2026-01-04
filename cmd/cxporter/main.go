@@ -33,8 +33,8 @@ Examples:
   # Convert to file
   cxporter convert --source keepass vault.kdbx --output credentials.cxf
 
-  # Preview without conversion
-  cxporter preview --source chrome passwords.csv`,
+  # Encrypted export (CXP format)
+  cxporter convert --source keepass vault.kdbx --encrypt-key <base64-pubkey> -o vault.cxp`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
@@ -44,7 +44,6 @@ func init() {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 
 	rootCmd.AddCommand(convertCmd)
-	rootCmd.AddCommand(previewCmd)
 	rootCmd.AddCommand(versionCmd)
 }
 

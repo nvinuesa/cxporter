@@ -35,7 +35,7 @@ fi
 
 # Create encrypted export
 echo "Creating encrypted CXP archive..."
-cxporter convert $SOURCE -o "$OUTPUT" --encrypt --recipient-key "$PUBKEY"
+cxporter convert $SOURCE -o "$OUTPUT" --encrypt-key "$PUBKEY"
 
 echo ""
 echo "Created: $OUTPUT"

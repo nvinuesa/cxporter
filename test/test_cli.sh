@@ -26,7 +26,6 @@ test_cli_help() {
     
     assert_contains "${output}" "cxporter" || return 1
     assert_contains "${output}" "convert" || return 1
-    assert_contains "${output}" "preview" || return 1
     
     pass
 }
@@ -40,18 +39,6 @@ test_cli_convert_help() {
     assert_contains "${output}" "convert" || return 1
     assert_contains "${output}" "source" || return 1
     assert_contains "${output}" "output" || return 1
-    
-    pass
-}
-
-test_cli_preview_help() {
-    print_test "CLI preview help"
-    
-    local output
-    output=$(run_cxporter_stdout preview --help)
-    
-    assert_contains "${output}" "preview" || return 1
-    assert_contains "${output}" "source" || return 1
     
     pass
 }
@@ -231,24 +218,6 @@ test_cli_filter_flag() {
     pass
 }
 
-test_cli_preview_filter() {
-    print_test "CLI preview with filter"
-    
-    local input="${TESTDATA}/chrome/passwords.csv"
-    
-    if [[ ! -f "${input}" ]]; then
-        skip "Test file not found: ${input}"
-        return
-    fi
-    
-    local preview_output
-    preview_output=$(run_cxporter_stdout preview -s chrome "${input}" -f "example")
-    
-    assert_contains "${preview_output}" "Filtered:" || return 1
-    
-    pass
-}
-
 test_cli_empty_filter() {
     print_test "CLI handles filter with no matches"
     
@@ -423,7 +392,7 @@ test_cli_encrypt_produces_cxp_response() {
     fi
 
     # Generate encrypted output
-    run_cxporter convert -s chrome "${input}" --encrypt --recipient-key "${pubkey}" -o "${output}" 2>/dev/null || return 1
+    run_cxporter convert -s chrome "${input}" --encrypt-key "${pubkey}" -o "${output}" 2>/dev/null || return 1
 
     # Verify output is valid JSON (not raw binary)
     assert_valid_json "${output}" || return 1
@@ -445,7 +414,7 @@ test_cli_encrypt_has_version_field() {
         return
     fi
 
-    run_cxporter convert -s chrome "${input}" --encrypt --recipient-key "${pubkey}" -o "${output}" 2>/dev/null || return 1
+    run_cxporter convert -s chrome "${input}" --encrypt-key "${pubkey}" -o "${output}" 2>/dev/null || return 1
 
     assert_json_has_key "${output}" ".version" || return 1
 
@@ -466,7 +435,7 @@ test_cli_encrypt_has_hpke_field() {
         return
     fi
 
-    run_cxporter convert -s chrome "${input}" --encrypt --recipient-key "${pubkey}" -o "${output}" 2>/dev/null || return 1
+    run_cxporter convert -s chrome "${input}" --encrypt-key "${pubkey}" -o "${output}" 2>/dev/null || return 1
 
     assert_json_has_key "${output}" ".hpke" || return 1
     assert_json_has_key "${output}" ".hpke.mode" || return 1
@@ -491,7 +460,7 @@ test_cli_encrypt_has_exporter_field() {
         return
     fi
 
-    run_cxporter convert -s chrome "${input}" --encrypt --recipient-key "${pubkey}" -o "${output}" 2>/dev/null || return 1
+    run_cxporter convert -s chrome "${input}" --encrypt-key "${pubkey}" -o "${output}" 2>/dev/null || return 1
 
     assert_json_has_key "${output}" ".exporter" || return 1
 
@@ -519,7 +488,7 @@ test_cli_encrypt_has_payload_field() {
         return
     fi
 
-    run_cxporter convert -s chrome "${input}" --encrypt --recipient-key "${pubkey}" -o "${output}" 2>/dev/null || return 1
+    run_cxporter convert -s chrome "${input}" --encrypt-key "${pubkey}" -o "${output}" 2>/dev/null || return 1
 
     assert_json_has_key "${output}" ".payload" || return 1
 
@@ -539,27 +508,6 @@ test_cli_encrypt_has_payload_field() {
     pass
 }
 
-test_cli_encrypt_requires_recipient_key() {
-    print_test "CLI encrypt requires recipient key"
-
-    local input="${TESTDATA}/chrome/passwords.csv"
-    local output
-    output=$(temp_file "cli-encrypt-nokey")
-
-    if [[ ! -f "${input}" ]]; then
-        skip "Test file not found: ${input}"
-        return
-    fi
-
-    # Should fail without recipient key
-    if run_cxporter convert -s chrome "${input}" --encrypt -o "${output}" 2>/dev/null; then
-        fail "Should have failed without recipient key"
-        return 1
-    fi
-
-    pass
-}
-
 test_cli_encrypt_stdout() {
     print_test "CLI encrypt to stdout produces valid JSON"
 
@@ -573,7 +521,7 @@ test_cli_encrypt_stdout() {
     fi
 
     local json_output
-    json_output=$(run_cxporter_stdout convert -s chrome "${input}" --encrypt --recipient-key "${pubkey}")
+    json_output=$(run_cxporter_stdout convert -s chrome "${input}" --encrypt-key "${pubkey}")
 
     # Verify output is valid JSON
     if ! echo "${json_output}" | jq empty 2>/dev/null; then
@@ -601,7 +549,6 @@ main() {
     test_cli_version
     test_cli_help
     test_cli_convert_help
-    test_cli_preview_help
     test_cli_no_args
     test_cli_invalid_command
     test_cli_convert_no_input
@@ -611,7 +558,6 @@ main() {
     test_cli_multiple_conversions
     test_cli_overwrite_output
     test_cli_filter_flag
-    test_cli_preview_filter
     test_cli_empty_filter
     test_cli_source_flag_variations
     test_cli_output_flag_variations
@@ -625,7 +571,6 @@ main() {
     test_cli_encrypt_has_hpke_field
     test_cli_encrypt_has_exporter_field
     test_cli_encrypt_has_payload_field
-    test_cli_encrypt_requires_recipient_key
     test_cli_encrypt_stdout
 
     print_summary

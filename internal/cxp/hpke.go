@@ -81,22 +81,24 @@ func NewHPKEContext(recipientPubKey []byte, params cxp.HpkeParameters) (*HPKECon
 		return nil, fmt.Errorf("failed to generate ephemeral key: %w", err)
 	}
 	var (
-		ctx *HPKEContext
-		err error
+		ctx             *HPKEContext
+		err             error
+		ephemeralPublic []byte
+		sharedSecret    []byte
 	)
 
 	// Generate ephemeral keypair
 	// Use secret.Do to contain the generated secret
 	secret.Do(func() {
 		// Compute ephemeral public key
-		ephemeralPublic, err := curve25519.X25519(ephemeralPrivate, curve25519.Basepoint)
+		ephemeralPublic, err = curve25519.X25519(ephemeralPrivate, curve25519.Basepoint)
 		if err != nil {
 			err = fmt.Errorf("failed to compute ephemeral public key: %w", err)
 			return
 		}
 
 		// Compute shared secret via ECDH
-		sharedSecret, err := curve25519.X25519(ephemeralPrivate, recipientPubKey)
+		sharedSecret, err = curve25519.X25519(ephemeralPrivate, recipientPubKey)
 		if err != nil {
 			err = fmt.Errorf("failed to compute shared secret: %w", err)
 			return
@@ -109,8 +111,8 @@ func NewHPKEContext(recipientPubKey []byte, params cxp.HpkeParameters) (*HPKECon
 		}
 
 		// Key schedule: derive key and nonce from shared secret
-		if err2 := ctx.keySchedule(sharedSecret, ephemeralPublic, recipientPubKey); err2 != nil {
-			err = err2
+		if keyErr := ctx.keySchedule(sharedSecret, ephemeralPublic, recipientPubKey); keyErr != nil {
+			err = keyErr
 		}
 	})
 

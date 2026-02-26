@@ -630,6 +630,35 @@ func TestHPKEContextParams(t *testing.T) {
 	}
 }
 
+// TestNewHPKEContextErrorPropagation is a regression test for a bug where :=
+// inside the secret.Do closure shadowed the outer err variable, causing errors
+// from the shared-secret ECDH computation to be silently swallowed.
+//
+// Concretely, NewHPKEContext would return (nil, nil) — no context and no error
+// — instead of (nil, error) when the recipient public key was invalid.
+//
+// Root cause: inside the closure passed to secret.Do, the short variable
+// declaration `sharedSecret, err := curve25519.X25519(...)` introduced a new
+// closure-local err that shadowed (rather than assigned to) the outer err
+// declared in NewHPKEContext. The outer err was never updated, so the
+// subsequent `if err != nil` check in the caller always evaluated to false.
+func TestNewHPKEContextErrorPropagation(t *testing.T) {
+	// The all-zero public key is the 2-torsion point on Curve25519. Scalar
+	// multiplication with it always yields the all-zero result, which
+	// golang.org/x/crypto/curve25519.X25519 rejects with "bad input point:
+	// low order point". This is the simplest way to force an error inside the
+	// secret.Do closure without mocking.
+	lowOrderKey := make([]byte, x25519KeySize) // all zeros → 2-torsion point
+
+	ctx, err := NewHPKEContext(lowOrderKey, DefaultHPKEParams())
+	if err == nil {
+		t.Fatal("NewHPKEContext: expected error for low-order public key, got nil — error was silently swallowed inside secret.Do")
+	}
+	if ctx != nil {
+		t.Errorf("NewHPKEContext: expected nil context on error, got non-nil")
+	}
+}
+
 func TestUnsupportedKDFAndAEAD(t *testing.T) {
 	_, pubKey, _ := GenerateKeyPair()
 
@@ -672,7 +701,6 @@ func TestCreateUnencryptedArchive(t *testing.T) {
 	}
 }
 
-// TestArchiveDeflateCompression verifies DEFLATE compression.
 func TestArchiveDeflateCompression(t *testing.T) {
 	_, pubKey, err := GenerateKeyPair()
 	if err != nil {
@@ -711,7 +739,6 @@ func TestArchiveDeflateCompression(t *testing.T) {
 	}
 }
 
-// TestJWEAlgorithmIdentifier verifies standard algorithm identifier.
 func TestJWEAlgorithmIdentifier(t *testing.T) {
 	_, pubKey, err := GenerateKeyPair()
 	if err != nil {
@@ -755,8 +782,6 @@ func TestJWEAlgorithmIdentifier(t *testing.T) {
 	}
 }
 
-// TestExportResponseJSONSerialization verifies that ExportResponse
-// serializes to proper CXP-compliant JSON with all required fields.
 func TestExportResponseJSONSerialization(t *testing.T) {
 	_, pubKey, err := GenerateKeyPair()
 	if err != nil {
